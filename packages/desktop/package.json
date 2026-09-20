@@ -1,0 +1,17 @@
+{
+  "name": "@cadw/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@cadw/app": "workspace:*",
+    "@cadw/platform": "workspace:*"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.5"
+  }
+}

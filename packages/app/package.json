@@ -1,0 +1,30 @@
+{
+  "name": "@cadw/app",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173 --strictPort"
+  },
+  "dependencies": {
+    "@cadw/core": "workspace:*",
+    "@cadw/geom2d": "workspace:*",
+    "@cadw/io-native": "workspace:*",
+    "@cadw/kernel": "workspace:*",
+    "@cadw/kernel-occt": "workspace:*",
+    "@cadw/platform": "workspace:*",
+    "@cadw/render": "workspace:*",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "vite": "8.3.0",
+    "vite-plugin-pwa": "1.3.0"
+  }
+}

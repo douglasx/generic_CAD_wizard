@@ -1,0 +1,9 @@
+CAD Wizard
+Copyright 2026 Douglas (Zeliang) Xu and the CAD Wizard contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product loads, as a separate and replaceable WebAssembly module,
+Open CASCADE Technology (OCCT) via the "libcascade" package, which is licensed
+under the GNU Lesser General Public License v2.1 with the Open CASCADE
+exception. See THIRD_PARTY_NOTICES.md.

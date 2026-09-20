@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    name: Gates (types, layers, unit, build, e2e)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm typecheck
+      - name: Layer rules
+        run: pnpm lint:layers
+      - name: Unit + kernel contract tests (coverage gate 85%)
+        run: pnpm test:coverage
+      - name: STEP attribute spike (regenerates corpus file; must not change)
+        run: |
+          pnpm spike:step-attributes
+          git diff --exit-code corpus/
+      - name: Build web app
+        run: pnpm build
+      - name: Bundle budget (initial JS <= 1 MB gzip)
+        run: |
+          size=$(find packages/app/dist/assets -name 'index-*.js' -exec gzip -9 -c {} \; | wc -c)
+          echo "initial JS gzip: $size bytes"
+          test "$size" -le 1048576
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+      - name: e2e (online + offline)
+        run: pnpm e2e
+        env:
+          CI: 'true'
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report/

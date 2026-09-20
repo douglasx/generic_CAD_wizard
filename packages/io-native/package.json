@@ -1,0 +1,12 @@
+{
+  "name": "@cadw/io-native",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {
+    "@cadw/core": "workspace:*",
+    "fflate": "0.8.3"
+  }
+}

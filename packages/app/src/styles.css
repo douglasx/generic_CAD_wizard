@@ -1,0 +1,16 @@
+:root { color-scheme: dark; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; }
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; background: #1d2127; color: #e6e6e6; }
+.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; background: #252a31; border-bottom: 1px solid #333a44; }
+.brand { margin-right: 8px; color: #4fc3f7; }
+.toolbar button { background: #2f3640; color: inherit; border: 1px solid #3d4552; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
+.toolbar button:hover:not(:disabled) { background: #3a4350; }
+.toolbar button[aria-pressed='true'] { background: #1f5f7e; border-color: #4fc3f7; }
+.toolbar button:disabled { opacity: 0.4; cursor: default; }
+.sep { width: 1px; height: 20px; background: #3d4552; margin: 0 4px; }
+.viewport { position: relative; min-height: 0; overflow: hidden; cursor: crosshair; touch-action: none; }
+.status { display: flex; flex-wrap: wrap; gap: 16px; padding: 4px 8px; background: #252a31; border-top: 1px solid #333a44; font-variant-numeric: tabular-nums; }
+.status .msg { flex: 1; color: #a9b4c2; }
+.online { color: #7bd88f; }
+.offline { color: #f0a35e; }

@@ -1,0 +1,17 @@
+{
+  "name": "@cadw/kernel-occt",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./client": "./src/client.ts",
+    "./node": "./src/node.ts",
+    "./kernel": "./src/libcascade-kernel.ts"
+  },
+  "dependencies": {
+    "@cadw/kernel": "workspace:*",
+    "comlink": "4.4.2",
+    "libcascade": "3.0.2"
+  }
+}
