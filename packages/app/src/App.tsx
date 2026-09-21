@@ -237,7 +237,15 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       return;
     }
 
-    if (session.snapshot.activeTool && !session.wantsSelection) {
+    session.setPickRadius(PICK_PIXELS * vp.unitsPerPixel);
+    if (session.snapshot.activeTool && session.wantsPick) {
+      // Object-picking step (TRIM, EXTEND, OFFSET): raw cursor, no snaps, preview what would change.
+      vp.setSnapMarker(null);
+      setSnapHit(null);
+      cursorRef.current = raw;
+      setCursor([raw[0], raw[1], 0]);
+      vp.setPreviewEntities(session.preview(raw));
+    } else if (session.snapshot.activeTool && !session.wantsSelection) {
       const p = resolve(raw);
       cursorRef.current = p;
       setCursor([p[0], p[1], 0]);
@@ -266,6 +274,13 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     if (!vp) return;
     const raw = modelAt(ev);
 
+    if (session.snapshot.activeTool && session.wantsPick) {
+      session.setPickRadius(PICK_PIXELS * vp.unitsPerPixel);
+      cursorRef.current = raw;
+      session.point(raw);
+      vp.setPreviewEntities(session.preview(raw));
+      return;
+    }
     if (session.snapshot.activeTool && !session.wantsSelection) {
       const p = resolve(raw);
       cursorRef.current = p;

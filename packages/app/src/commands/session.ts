@@ -35,6 +35,7 @@ export class CommandSession {
   private readonly logLines: string[] = [];
   private readonly listeners = new Set<() => void>();
   private revision = 0;
+  private pickRadius = 1;
 
   private readonly selectionPort: SelectionPort;
 
@@ -59,6 +60,16 @@ export class CommandSession {
   /** Increments on every change; lets React subscribe cheaply. */
   get version(): number {
     return this.revision;
+  }
+
+  /** Pick aperture in model units; the app updates it on zoom. */
+  setPickRadius(r: number): void {
+    if (r > 0) this.pickRadius = r;
+  }
+
+  /** True when the active tool picks objects with raw (unsnapped) clicks. */
+  get wantsPick(): boolean {
+    return !!this.tool?.wantsPick?.(this.state);
   }
 
   /** True while the active tool is collecting a selection (the app routes clicks to selecting). */
@@ -209,7 +220,7 @@ export class CommandSession {
   private ctx(): ToolContext {
     const doc = this.history.doc;
     const selected = new Set(this.selectionPort.get());
-    return { doc, newId: this.newId, selection: doc.order.filter((id) => selected.has(id)) };
+    return { doc, newId: this.newId, selection: doc.order.filter((id) => selected.has(id)), pickRadius: this.pickRadius };
   }
 
   private log(line: string): void {

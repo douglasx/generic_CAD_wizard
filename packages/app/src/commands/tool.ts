@@ -18,6 +18,8 @@ export interface ToolContext {
   newId(prefix: string): EntityId;
   /** The current selection, in document order. */
   readonly selection: readonly EntityId[];
+  /** Pick aperture in model units (the app sets it from the zoom level). */
+  readonly pickRadius: number;
 }
 
 export interface ToolResult<S> {
@@ -51,6 +53,8 @@ export interface ToolDefinition<S> {
   wantsSelection?(state: S): boolean;
   /** True when a bare number means a value (angle, factor), not a distance. */
   wantsNumber?(state: S): boolean;
+  /** True when clicks pick objects: the app sends the raw cursor, without snaps. */
+  wantsPick?(state: S): boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

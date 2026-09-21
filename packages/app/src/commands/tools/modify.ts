@@ -267,4 +267,6 @@ export const mirrorTool: ToolDefinition<MirrorState> = {
   },
 };
 
-export const MODIFY_TOOLS = [moveTool, copyTool, rotateTool, scaleTool, mirrorTool, eraseTool];
+import { CURVE_EDIT_TOOLS } from './curve-edit.ts';
+
+export const MODIFY_TOOLS = [moveTool, copyTool, rotateTool, scaleTool, mirrorTool, ...CURVE_EDIT_TOOLS, eraseTool];
