@@ -41,3 +41,14 @@ test('ARC by mouse: toolbar button, three clicks', async ({ page }) => {
   const a = await only(page);
   expect(a.kind).toBe('arc');
 });
+
+test('CIRCLE by centre and typed radius, and by 2P', async ({ page }) => {
+  await ready(page);
+  await type(page, 'C', '0,0', '75');
+  const c = await only(page);
+  expect(c.kind).toBe('circle');
+  expect(c.radius as number).toBeCloseTo(75, 9);
+  await type(page, 'U', 'C', '2P', '0,0', '@200,0');
+  const d = await only(page);
+  expect(d.center).toEqual([100, 0, 0]);
+});

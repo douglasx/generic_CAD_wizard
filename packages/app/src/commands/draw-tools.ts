@@ -124,5 +124,6 @@ export const polylineTool: ToolDefinition<PlineState> = {
 };
 
 import { arcTool } from './tools/arc.ts';
+import { circleTool } from './tools/circle.ts';
 
-export const DRAW_TOOLS = [lineTool, polylineTool, arcTool];
+export const DRAW_TOOLS = [lineTool, polylineTool, arcTool, circleTool];

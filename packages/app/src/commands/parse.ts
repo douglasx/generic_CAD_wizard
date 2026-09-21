@@ -22,7 +22,8 @@ const NUM = String.raw`[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?`;
 const CARTESIAN = new RegExp(`^(@)?\\s*(${NUM})\\s*,\\s*(${NUM})$`);
 const POLAR = new RegExp(`^(@)?\\s*(${NUM})\\s*<\\s*(${NUM})$`);
 const DISTANCE = new RegExp(`^${NUM}$`);
-const WORD = /^[A-Za-z][A-Za-z0-9_-]*$/;
+// Checked after DISTANCE, so a leading digit is fine: 2P, 3P are keywords.
+const WORD = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 
 export function parseInput(raw: string, lastPoint: Vec2 | null): ParsedInput {
   const text = raw.trim();

@@ -108,12 +108,14 @@ export class CommandSession {
         return this.feed({ type: 'point', point: parsed.point });
       case 'distance': {
         const base = this.lastPoint;
-        const p = base && cursor ? pointAlong(base, cursor, parsed.value) : null;
-        if (!p) {
-          this.log('A distance needs a previous point and a cursor direction.');
+        if (!base) {
+          this.log('A distance needs a previous point.');
           this.emit();
           return;
         }
+        // Along the rubber band; with no usable cursor direction, along +X
+        // (for a radius the direction does not matter).
+        const p = (cursor && pointAlong(base, cursor, parsed.value)) ?? [base[0] + parsed.value, base[1]];
         return this.feed({ type: 'point', point: p });
       }
       case 'error':

@@ -31,6 +31,8 @@ describe('parseInput (REQ-003.2)', () => {
     expect(parseInput('120', null)).toEqual({ kind: 'distance', value: 120 });
     expect(parseInput('c', null)).toEqual({ kind: 'word', value: 'C' });
     expect(parseInput('pl', null)).toEqual({ kind: 'word', value: 'PL' });
+    expect(parseInput('2p', null)).toEqual({ kind: 'word', value: '2P' });
+    expect(parseInput('3e2', null)).toEqual({ kind: 'distance', value: 300 });
     expect(parseInput('   ', null)).toEqual({ kind: 'enter' });
   });
 
