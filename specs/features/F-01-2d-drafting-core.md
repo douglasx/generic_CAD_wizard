@@ -77,3 +77,4 @@ Each slice is one PR under ~400 changed lines, with `pnpm check` and the e2e sui
 | 1 Entity model + rendering | Done 2026-09-20 | 6 entity kinds, schema v2 + v1 migration, curve flattening (ADR 0008) |
 | 2 Command line + coordinates | Done 2026-09-21 | Parser (`100,50`, `@dx,dy`, `@d<a`, `d<a`, bare distance), `CommandSession`, LINE/PLINE with Close/Undo, aliases, Enter repeats, U/REDO, Up-arrow recall; typed and mouse paths proven identical |
 | 3 Drawing tools | Done 2026-09-21 | ARC (3-point, start-centre-end, centre-first), CIRCLE (centre-radius, 2P), ELLIPSE (centre-axes, auto axis swap), SPLINE (fit points, Close/Undo); 4 separate commits; toolbar generated from the tool list |
+| 4 Snaps, ortho, grid | Done 2026-09-21 | Exact primitives + intersections (reused by slice 7); 7 object snaps with AutoCAD priority and markers; OSNAP/ORTHO/GRID toggles (F3/F8/F9) with per-snap menu, saved per device; 3 commits |

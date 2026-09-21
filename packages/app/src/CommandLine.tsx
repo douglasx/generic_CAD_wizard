@@ -38,6 +38,7 @@ export const CommandLine = forwardRef<CommandLineHandle, Props>(function Command
   };
 
   const onKeyDown = (ev: React.KeyboardEvent<HTMLInputElement>) => {
+    if (/^F\d{1,2}$/.test(ev.key)) return; // function keys (F3/F8/F9) reach the app
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
       submit();

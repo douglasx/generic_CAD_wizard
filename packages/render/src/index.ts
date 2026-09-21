@@ -20,6 +20,7 @@ export class Viewport {
   private readonly linesGroup = new THREE.Group();
   private readonly meshGroup = new THREE.Group();
   private preview: THREE.Object3D | null = null;
+  private marker: THREE.Object3D | null = null;
   private halfHeight = 250; // mm visible above/below centre
   private readonly target = new THREE.Vector3(0, 0, 0);
   private view: ViewName = 'top';
@@ -85,6 +86,39 @@ export class Viewport {
       this.scene.add(group);
     }
     this.requestRender();
+  }
+
+  /**
+   * Object-snap marker (REQ-003.3): a fixed-size glyph per snap kind, drawn
+   * on top of everything. Shapes follow AutoCAD: square endpoint, triangle
+   * midpoint, circle centre, diamond quadrant, X intersection, ⊥ perpendicular,
+   * hourglass nearest.
+   */
+  setSnapMarker(marker: { point: readonly [number, number]; kind: string } | null): void {
+    if (this.marker) {
+      this.scene.remove(this.marker);
+      disposeObject(this.marker);
+      this.marker = null;
+    }
+    if (marker) {
+      const s = 7 * this.unitsPerPixel;
+      const [x, y] = marker.point;
+      const pts = markerOutline(marker.kind).map(([u, v]) => new THREE.Vector3(x + u * s, y + v * s, 0));
+      const geometry = new THREE.BufferGeometry().setFromPoints(pts);
+      const material = new THREE.LineBasicMaterial({ color: 0xffcc00, depthTest: false });
+      const object = new THREE.LineSegments(geometry, material);
+      object.renderOrder = 999;
+      this.marker = object;
+      this.scene.add(object);
+    }
+    this.requestRender();
+  }
+
+  /** Model point → client pixel coordinates (for tests and tooltips). */
+  modelToScreen(x: number, y: number): [number, number] {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const v = new THREE.Vector3(x, y, 0).project(this.camera);
+    return [rect.left + ((v.x + 1) / 2) * rect.width, rect.top + ((1 - v.y) / 2) * rect.height];
   }
 
   setMeshes(meshes: readonly MeshInput[]): void {
@@ -222,6 +256,29 @@ function makeEntityObject(entity: Entity, style: { color: string; linetype: stri
     return line;
   }
   return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: new THREE.Color(style.color) }));
+}
+
+/** Unit-size marker glyphs as line-segment pairs, centred on the snap point. */
+function markerOutline(kind: string): [number, number][] {
+  const loop = (pts: [number, number][]) => pts.flatMap((p, i) => [p, pts[(i + 1) % pts.length]!]);
+  switch (kind) {
+    case 'endpoint':
+      return loop([[-1, -1], [1, -1], [1, 1], [-1, 1]]);
+    case 'midpoint':
+      return loop([[-1, -0.8], [1, -0.8], [0, 1]]);
+    case 'center':
+      return loop(Array.from({ length: 16 }, (_, i) => [Math.cos((i * Math.PI) / 8), Math.sin((i * Math.PI) / 8)] as [number, number]));
+    case 'quadrant':
+      return loop([[0, -1], [1, 0], [0, 1], [-1, 0]]);
+    case 'intersection':
+      return [[-1, -1], [1, 1], [-1, 1], [1, -1]];
+    case 'perpendicular':
+      return [[-1, -1], [1, -1], [-1, -1], [-1, 1], [-1, 0], [0, 0], [0, 0], [0, -1]];
+    case 'nearest':
+      return [[-1, -1], [1, 1], [1, 1], [-1, 1], [-1, 1], [1, -1], [1, -1], [-1, -1]];
+    default:
+      return loop([[-1, -1], [1, -1], [1, 1], [-1, 1]]);
+  }
 }
 
 function disposeObject(o: THREE.Object3D): void {

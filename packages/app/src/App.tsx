@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createDocument, entityList, History, randomIds, type CadDocument, type Vec3 } from '@cadw/core';
-import { ALL_SNAP_KINDS, findObjectSnap, type Vec2 } from '@cadw/geom2d';
+import type { Snap, Vec2 } from '@cadw/geom2d';
 import { readCadw, writeCadw } from '@cadw/io-native';
 import { CADW_FILE, type PlatformAdapter } from '@cadw/platform';
 import { Viewport, type ViewName } from '@cadw/render';
 import { CommandLine, type CommandLineHandle } from './CommandLine.tsx';
+import { DEFAULT_SETTINGS, parseSettings, resolveCursor, SNAP_LABELS, type DraftSettings } from './cursor.ts';
+import { DraftingBar } from './DraftingBar.tsx';
 import { DRAW_TOOLS } from './commands/draw-tools.ts';
 import { CommandSession } from './commands/session.ts';
 import { getKernel } from './kernel-session.ts';
 
 const AUTOSAVE_KEY = 'autosave.cadw';
-const SNAP_PIXELS = 10;
+const SETTINGS_KEY = 'settings.json';
 
 export function App({ platform }: { platform: PlatformAdapter }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -33,10 +35,36 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   const [view, setView] = useState<ViewName>('top');
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveChain = useRef<Promise<void>>(Promise.resolve());
+  const [settings, setSettings] = useState<DraftSettings>(DEFAULT_SETTINGS);
+  const settingsRef = useRef(settings);
+  const rawCursorRef = useRef<Vec2>([0, 0]);
+  const [snapHit, setSnapHit] = useState<Snap | null>(null);
+
+  // Drafting settings persist per device (IndexedDB via the platform adapter).
+  useEffect(() => {
+    platform.storage
+      .get(SETTINGS_KEY)
+      .then((b) => b && setSettings(parseSettings(new TextDecoder().decode(b))))
+      .catch(() => {});
+  }, [platform]);
+  const changeSettings = useCallback(
+    (next: DraftSettings) => {
+      setSettings(next);
+      void platform.storage.set(SETTINGS_KEY, new TextEncoder().encode(JSON.stringify(next))).catch(() => {});
+    },
+    [platform],
+  );
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
   // Test hook for e2e: read the live document (only under automation).
   useEffect(() => {
-    if (navigator.webdriver) (window as unknown as { __cadw: unknown }).__cadw = { doc: () => historyRef.current.doc };
+    if (navigator.webdriver)
+      (window as unknown as { __cadw: unknown }).__cadw = {
+        doc: () => historyRef.current.doc,
+        toScreen: (x: number, y: number) => viewportRef.current?.modelToScreen(x, y),
+      };
   }, []);
 
   useEffect(() => {
@@ -98,17 +126,15 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
   }, []);
 
-  const snapped = useCallback(
-    (p: Vec3): Vec2 => {
+  /** Raw model point → snapped/ortho/grid point, updating the snap marker. */
+  const resolve = useCallback(
+    (raw: Vec2): Vec2 => {
       const vp = viewportRef.current;
-      if (!vp) return [p[0], p[1]];
-      const s = findObjectSnap([p[0], p[1]], entityList(historyRef.current.doc), {
-        enabled: new Set(ALL_SNAP_KINDS),
-        radius: SNAP_PIXELS * vp.unitsPerPixel,
-        from: session.lastPoint,
-        tolerance: vp.unitsPerPixel * 0.25,
-      });
-      return s ? s.point : [p[0], p[1]];
+      if (!vp) return raw;
+      const r = resolveCursor(raw, entityList(historyRef.current.doc), settingsRef.current, session.lastPoint, vp.unitsPerPixel);
+      vp.setSnapMarker(r.snap);
+      setSnapHit(r.snap);
+      return r.point;
     },
     [session],
   );
@@ -116,7 +142,9 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   const onPointerMove = (ev: React.PointerEvent) => {
     const vp = viewportRef.current;
     if (!vp) return;
-    const p = snapped(vp.screenToModel(ev.clientX, ev.clientY));
+    const m = vp.screenToModel(ev.clientX, ev.clientY);
+    rawCursorRef.current = [m[0], m[1]];
+    const p = resolve([m[0], m[1]]);
     cursorRef.current = p;
     setCursor([p[0], p[1], 0]);
     vp.setPreviewEntities(session.preview(p));
@@ -126,14 +154,39 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     if (ev.button !== 0) return;
     const vp = viewportRef.current;
     if (!vp) return;
-    const p = snapped(vp.screenToModel(ev.clientX, ev.clientY));
+    const m = vp.screenToModel(ev.clientX, ev.clientY);
+    const p = resolve([m[0], m[1]]);
     cursorRef.current = p;
     session.point(p);
   };
 
+  // Settings changes re-resolve the cursor so ortho/snap take effect immediately.
+  useEffect(() => {
+    const p = resolve(rawCursorRef.current);
+    cursorRef.current = p;
+    viewportRef.current?.setPreviewEntities(session.preview(p));
+  }, [settings, resolve, session]);
+
   // Keyboard: typing anywhere goes to the command line (AutoCAD behaviour).
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
+      // Drafting toggles work everywhere, including while typing a command.
+      const cur = settingsRef.current;
+      if (ev.key === 'F3') {
+        ev.preventDefault();
+        changeSettings({ ...cur, osnap: !cur.osnap });
+        return;
+      }
+      if (ev.key === 'F8') {
+        ev.preventDefault();
+        changeSettings({ ...cur, ortho: !cur.ortho });
+        return;
+      }
+      if (ev.key === 'F9') {
+        ev.preventDefault();
+        changeSettings({ ...cur, gridSnap: !cur.gridSnap });
+        return;
+      }
       const target = ev.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
       const mod = ev.ctrlKey || ev.metaKey;
@@ -156,7 +209,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [session]);
+  }, [session, changeSettings]);
 
   const save = async () => {
     try {
@@ -251,7 +304,9 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         onCancel={() => session.cancel()}
       />
       <footer className="status">
+        <DraftingBar settings={settings} onChange={changeSettings} />
         <span data-testid="entity-count">{entityList(doc).length} entities</span>
+        <span className="snapkind" data-testid="snap-kind">{snapHit ? SNAP_LABELS[snapHit.kind] : ''}</span>
         <span>
           x {cursor[0].toFixed(2)} y {cursor[1].toFixed(2)} mm
         </span>

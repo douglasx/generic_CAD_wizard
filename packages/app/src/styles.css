@@ -19,3 +19,11 @@ html, body, #root { margin: 0; height: 100%; background: #1d2127; color: #e6e6e6
 .cmdlog li { white-space: pre; overflow: hidden; text-overflow: ellipsis; line-height: 1.2em; }
 .cmdprompt { display: flex; gap: 6px; align-items: center; color: #4fc3f7; }
 .cmdprompt input { flex: 1; background: transparent; border: none; outline: none; color: #e6e6e6; font: inherit; padding: 2px 0; }
+.status { align-items: center; }
+.drafting { position: relative; display: inline-flex; gap: 2px; }
+.drafting button { background: #2f3640; color: #a9b4c2; border: 1px solid #3d4552; border-radius: 3px; padding: 1px 6px; font-size: 11px; cursor: pointer; }
+.drafting button[aria-pressed='true'] { color: #e6e6e6; background: #1f5f7e; border-color: #4fc3f7; }
+.drafting .caret { padding: 1px 3px; }
+.snap-menu { position: absolute; bottom: 24px; left: 0; background: #252a31; border: 1px solid #3d4552; border-radius: 4px; padding: 6px 10px; display: grid; gap: 4px; z-index: 10; white-space: nowrap; }
+.snap-menu label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+.snapkind { color: #ffcc00; min-width: 80px; }
