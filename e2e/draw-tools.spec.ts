@@ -52,3 +52,11 @@ test('CIRCLE by centre and typed radius, and by 2P', async ({ page }) => {
   const d = await only(page);
   expect(d.center).toEqual([100, 0, 0]);
 });
+
+test('ELLIPSE by centre, axis end and other-axis distance', async ({ page }) => {
+  await ready(page);
+  await type(page, 'EL', '0,0', '@120,0', '40');
+  const e = await only(page);
+  expect(e.kind).toBe('ellipse');
+  expect(e.ratio as number).toBeCloseTo(1 / 3, 9);
+});
