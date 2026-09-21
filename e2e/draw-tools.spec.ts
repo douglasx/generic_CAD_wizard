@@ -60,3 +60,18 @@ test('ELLIPSE by centre, axis end and other-axis distance', async ({ page }) => 
   expect(e.kind).toBe('ellipse');
   expect(e.ratio as number).toBeCloseTo(1 / 3, 9);
 });
+
+test('SPLINE through typed fit points', async ({ page }) => {
+  await ready(page);
+  await type(page, 'SPL', '-200,0', '@100,80', '@100,-120', '@100,60', '');
+  const s = await only(page);
+  expect(s.kind).toBe('spline');
+  expect(s.points as unknown[]).toHaveLength(4);
+});
+
+test('every drawing tool is on the toolbar and shows its alias', async ({ page }) => {
+  await ready(page);
+  for (const [label, alias] of [['Line', 'L'], ['Polyline', 'PL'], ['Arc', 'A'], ['Circle', 'C'], ['Ellipse', 'EL'], ['Spline', 'SPL']]) {
+    await expect(page.getByRole('button', { name: label, exact: true })).toHaveAttribute('title', `${label} (${alias})`);
+  }
+});

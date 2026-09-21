@@ -126,5 +126,6 @@ export const polylineTool: ToolDefinition<PlineState> = {
 import { arcTool } from './tools/arc.ts';
 import { circleTool } from './tools/circle.ts';
 import { ellipseTool } from './tools/ellipse.ts';
+import { splineTool } from './tools/spline.ts';
 
-export const DRAW_TOOLS = [lineTool, polylineTool, arcTool, circleTool, ellipseTool];
+export const DRAW_TOOLS = [lineTool, polylineTool, arcTool, circleTool, ellipseTool, splineTool];
