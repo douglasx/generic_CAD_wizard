@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createDocument, entityList, History, randomIds, type CadDocument, type Vec3 } from '@cadw/core';
-import { findSnap, flattenEntity, type Segment, type Vec2 } from '@cadw/geom2d';
+import { ALL_SNAP_KINDS, findObjectSnap, type Vec2 } from '@cadw/geom2d';
 import { readCadw, writeCadw } from '@cadw/io-native';
 import { CADW_FILE, type PlatformAdapter } from '@cadw/platform';
 import { Viewport, type ViewName } from '@cadw/render';
@@ -98,18 +98,20 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
   }, []);
 
-  const snapped = useCallback((p: Vec3): Vec2 => {
-    const vp = viewportRef.current;
-    if (!vp) return [p[0], p[1]];
-    const segments: Segment[] = entityList(historyRef.current.doc).flatMap((e) => {
-      const pts = flattenEntity(e, vp.unitsPerPixel);
-      const segs: Segment[] = [];
-      for (let i = 1; i < pts.length; i++) segs.push({ start: pts[i - 1]!, end: pts[i]! });
-      return segs;
-    });
-    const s = findSnap([p[0], p[1]], segments, SNAP_PIXELS * vp.unitsPerPixel);
-    return s ? s.point : [p[0], p[1]];
-  }, []);
+  const snapped = useCallback(
+    (p: Vec3): Vec2 => {
+      const vp = viewportRef.current;
+      if (!vp) return [p[0], p[1]];
+      const s = findObjectSnap([p[0], p[1]], entityList(historyRef.current.doc), {
+        enabled: new Set(ALL_SNAP_KINDS),
+        radius: SNAP_PIXELS * vp.unitsPerPixel,
+        from: session.lastPoint,
+        tolerance: vp.unitsPerPixel * 0.25,
+      });
+      return s ? s.point : [p[0], p[1]];
+    },
+    [session],
+  );
 
   const onPointerMove = (ev: React.PointerEvent) => {
     const vp = viewportRef.current;
