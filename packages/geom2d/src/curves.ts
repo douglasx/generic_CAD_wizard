@@ -124,3 +124,35 @@ export function catmullRomPoint(p0: Vec2, p1: Vec2, p2: Vec2, p3: Vec2, t: numbe
   const b2 = lerp(a2, a3, t1, t3);
   return lerp(b1, b2, t1, t2);
 }
+
+/**
+ * Circle through three points. Returns null when the points are collinear
+ * (within `tolerance`, measured as twice the triangle area over the longest side).
+ */
+export function circleThrough(a: Vec2, b: Vec2, c: Vec2, tolerance = 1e-9): { center: Vec2; radius: number } | null {
+  const d = 2 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]));
+  const longest = Math.max(Math.hypot(b[0] - a[0], b[1] - a[1]), Math.hypot(c[0] - b[0], c[1] - b[1]), Math.hypot(a[0] - c[0], a[1] - c[1]));
+  if (longest === 0 || Math.abs(d) / longest <= tolerance) return null;
+  const a2 = a[0] * a[0] + a[1] * a[1];
+  const b2 = b[0] * b[0] + b[1] * b[1];
+  const c2 = c[0] * c[0] + c[1] * c[1];
+  const cx = (a2 * (b[1] - c[1]) + b2 * (c[1] - a[1]) + c2 * (a[1] - b[1])) / d;
+  const cy = (a2 * (c[0] - b[0]) + b2 * (a[0] - c[0]) + c2 * (b[0] - a[0])) / d;
+  return { center: [cx, cy], radius: Math.hypot(a[0] - cx, a[1] - cy) };
+}
+
+/**
+ * Arc through start → mid → end, as centre, radius and counter-clockwise
+ * start/end angles. A clockwise pick is stored as the same arc swept CCW
+ * from end to start, so every stored arc is CCW (ADR 0008).
+ */
+export function arcThrough(start: Vec2, mid: Vec2, end: Vec2): { center: Vec2; radius: number; startAngle: number; endAngle: number } | null {
+  const circle = circleThrough(start, mid, end);
+  if (!circle) return null;
+  const { center, radius } = circle;
+  const ang = (p: Vec2) => Math.atan2(p[1] - center[1], p[0] - center[0]);
+  const turn = (mid[0] - start[0]) * (end[1] - mid[1]) - (mid[1] - start[1]) * (end[0] - mid[0]);
+  return turn > 0
+    ? { center, radius, startAngle: ang(start), endAngle: ang(end) }
+    : { center, radius, startAngle: ang(end), endAngle: ang(start) };
+}

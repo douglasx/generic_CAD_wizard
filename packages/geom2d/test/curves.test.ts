@@ -159,3 +159,39 @@ describe('flattenEntity + entityBounds', () => {
     expect(b.max).toEqual([13, 14]);
   });
 });
+
+import { arcThrough, circleThrough } from '../src/index.ts';
+
+describe('circleThrough / arcThrough', () => {
+  it('finds the circumcircle and rejects collinear points', () => {
+    const c = circleThrough([10, 0], [0, 10], [-10, 0])!;
+    expect(c.center[0]).toBeCloseTo(0, 12);
+    expect(c.center[1]).toBeCloseTo(0, 12);
+    expect(c.radius).toBeCloseTo(10, 12);
+    expect(circleThrough([0, 0], [1, 1], [2, 2])).toBeNull();
+    expect(circleThrough([0, 0], [0, 0], [0, 0])).toBeNull();
+  });
+
+  it('property: the arc passes through its mid point whichever way it was picked', () => {
+    fc.assert(
+      fc.property(
+        fc.double({ min: 1, max: 1000, noNaN: true }),
+        fc.double({ min: 0, max: TWO_PI, noNaN: true }),
+        fc.double({ min: 0.2, max: TWO_PI - 0.2, noNaN: true }),
+        fc.boolean(),
+        (r, a0, span, clockwise) => {
+          const at = (t: number): Vec2 => [r * Math.cos(t), r * Math.sin(t)];
+          const dir = clockwise ? -1 : 1;
+          const s = at(a0);
+          const m = at(a0 + (dir * span) / 2);
+          const e = at(a0 + dir * span);
+          const arc = arcThrough(s, m, e)!;
+          expect(arc.radius).toBeCloseTo(r, 6);
+          expect(sweep(arc.startAngle, arc.endAngle)).toBeCloseTo(span, 6);
+          const pts = flattenArc(arc.center, arc.radius, arc.startAngle, arc.endAngle, 1e-4);
+          expect(Math.min(...pts.map((p) => dist(p, m)))).toBeLessThan(r * 0.02 + 1e-3);
+        },
+      ),
+    );
+  });
+});

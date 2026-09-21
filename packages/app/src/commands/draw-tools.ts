@@ -20,6 +20,7 @@ interface LineState {
  */
 export const lineTool: ToolDefinition<LineState> = {
   name: 'LINE',
+  label: 'Line',
   aliases: ['L'],
   init: () => ({ first: null, current: null, segments: [] }),
   prompt(s) {
@@ -77,6 +78,7 @@ interface PlineState {
  */
 export const polylineTool: ToolDefinition<PlineState> = {
   name: 'PLINE',
+  label: 'Polyline',
   aliases: ['PL'],
   init: () => ({ points: [] }),
   prompt(s) {
@@ -121,4 +123,6 @@ export const polylineTool: ToolDefinition<PlineState> = {
   },
 };
 
-export const DRAW_TOOLS = [lineTool, polylineTool];
+import { arcTool } from './tools/arc.ts';
+
+export const DRAW_TOOLS = [lineTool, polylineTool, arcTool];

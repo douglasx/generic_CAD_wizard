@@ -28,6 +28,8 @@ export interface ToolResult<S> {
 
 export interface ToolDefinition<S> {
   readonly name: string;
+  /** Toolbar label. */
+  readonly label: string;
   readonly aliases: readonly string[];
   init(ctx: ToolContext): S;
   /** Prompt text, with options in brackets like AutoCAD: `Specify next point or [Close/Undo]:` */

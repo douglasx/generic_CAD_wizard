@@ -216,8 +216,11 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     <div className="app" data-ready={restored ? 'true' : 'false'}>
       <header className="toolbar">
         <strong className="brand">CAD Wizard</strong>
-        <button aria-pressed={live.activeTool === 'LINE'} onClick={() => session.run('LINE')} title="Line (L)">Line</button>
-        <button aria-pressed={live.activeTool === 'PLINE'} onClick={() => session.run('PLINE')} title="Polyline (PL)">Polyline</button>
+        {DRAW_TOOLS.map((t) => (
+          <button key={t.name} aria-pressed={live.activeTool === t.name} onClick={() => session.run(t.name)} title={`${t.label} (${t.aliases.join(', ')})`}>
+            {t.label}
+          </button>
+        ))}
         <button aria-pressed={live.activeTool === null} onClick={() => session.cancel()} title="Select (Esc)">Select</button>
         <span className="sep" />
         <button onClick={() => session.undo()} disabled={!h.canUndo} title="Undo (Ctrl+Z)">Undo</button>
