@@ -83,3 +83,31 @@ test('ERASE by window selection inside the command', async ({ page }) => {
   const left = await ents(page);
   expect(left.map((e) => e.kind)).toEqual(['circle']);
 });
+
+test('ROTATE 90°, SCALE ×2, MIRROR keeping the original', async ({ page }) => {
+  await scene(page);
+  await clickAt(page, 50, 0);
+  await type(page, 'RO', '0,0', '90');
+  let [l] = await ents(page);
+  expect(l!.end![0]).toBeCloseTo(0, 9);
+  expect(l!.end![1]).toBeCloseTo(100, 9);
+
+  await clickAt(page, 230, 0);
+  await type(page, 'SC', '200,0', '2');
+  let c = (await ents(page))[1]!;
+  expect(c.radius).toBe(60);
+
+  await clickAt(page, 260, 0);
+  await type(page, 'MI', '0,-100', '@10,0', '');
+  const all = await ents(page);
+  expect(all).toHaveLength(3);
+  c = all[2]!;
+  expect(c.center![1]).toBeCloseTo(-200, 9);
+});
+
+test('every modify command is on the toolbar with its alias', async ({ page }) => {
+  await ready(page);
+  for (const [label, alias] of [['Move', 'M'], ['Copy', 'CO, CP'], ['Rotate', 'RO'], ['Scale', 'SC'], ['Mirror', 'MI'], ['Erase', 'E']]) {
+    await expect(page.getByRole('button', { name: label, exact: true })).toHaveAttribute('title', `${label} (${alias})`);
+  }
+});

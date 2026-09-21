@@ -91,3 +91,67 @@ describe('ERASE', () => {
     expect(t.session.snapshot.prompt).toBe('MOVE Select objects, then press Enter:');
   });
 });
+
+import type { CircleEntity } from '@cadw/core';
+
+describe('ROTATE, SCALE, MIRROR (REQ-003.6)', () => {
+  it('ROTATE by a typed angle in degrees about the base point', () => {
+    const t = setup(1);
+    t.select('l0');
+    for (const x of ['RO', '0,0', '90']) t.session.submit(x);
+    const l = lines(t.history)[0]!;
+    expect(l.end[0]).toBeCloseTo(0, 9);
+    expect(l.end[1]).toBeCloseTo(100, 9);
+  });
+
+  it('ROTATE by a reference point (angle from the base)', () => {
+    const t = setup(1);
+    t.select('l0');
+    for (const x of ['RO', '0,0', '-50,-50']) t.session.submit(x);
+    const l = lines(t.history)[0]!;
+    expect(l.end[0]).toBeCloseTo(-100 / Math.SQRT2, 9);
+  });
+
+  it('SCALE by a typed factor; zero is refused', () => {
+    const t = setup(1);
+    t.select('l0');
+    for (const x of ['SC', '100,0', '0']) t.session.submit(x);
+    expect(t.session.snapshot.log.at(-1)).toMatch(/greater than zero/);
+    t.session.submit('0.5');
+    expect(lines(t.history)[0]!.start).toEqual([50, 0, 0]);
+  });
+
+  it('SCALE scales circle radii', () => {
+    const t = setup(0);
+    t.history.execute(addEntity({ id: 'c' as EntityId, kind: 'circle', layer: '0', center: [10, 0, 0], radius: 5 }));
+    t.select('c');
+    for (const x of ['SC', '0,0', '3']) t.session.submit(x);
+    const c = entityList(t.history.doc)[0] as CircleEntity;
+    expect(c.center).toEqual([30, 0, 0]);
+    expect(c.radius).toBe(15);
+  });
+
+  it('MIRROR keeps originals by default (Enter), or erases them with Y', () => {
+    const t = setup(1);
+    t.select('l0');
+    for (const x of ['MI', '0,50', '10,50', '']) t.session.submit(x);
+    const [orig, copy] = lines(t.history);
+    expect(orig!.start).toEqual([0, 0, 0]);
+    expect(copy!.start[1]).toBeCloseTo(100, 9);
+
+    const u = setup(1);
+    u.select('l0');
+    for (const x of ['MI', '0,50', '10,50', 'y']) u.session.submit(x);
+    expect(lines(u.history)).toHaveLength(1);
+    expect(lines(u.history)[0]!.start[1]).toBeCloseTo(100, 9);
+  });
+
+  it('a bare number means an angle or factor only where asked; elsewhere a distance', () => {
+    const t = setup(1);
+    t.select('l0');
+    t.session.submit('RO');
+    t.session.submit('0,0');
+    t.session.submit('45');
+    expect(t.session.snapshot.activeTool).toBeNull(); // consumed as an angle
+  });
+});
