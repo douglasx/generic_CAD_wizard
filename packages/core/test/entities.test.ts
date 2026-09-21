@@ -142,3 +142,32 @@ describe('updateEntity (REQ-003.7)', () => {
     expect(() => locked.execute(updateEntity({ ...l, end: [2, 0, 0] }))).toThrow(/locked/);
   });
 });
+
+import { batch } from '../src/index.ts';
+
+describe('batch command (REQ-003.10)', () => {
+  const mk = (i: number) => ({ id: `b${i}` as EntityId, kind: 'line' as const, layer: '0', start: [0, i, 0] as const, end: [10, i, 0] as const });
+
+  it('applies all steps as one undo step and replays from the journal', () => {
+    const start = createDocument();
+    const h = new History(start);
+    h.execute(batch([mk(1), mk(2), mk(3)].map((e) => addEntity(e)), 'copy'));
+    expect(entityList(h.doc)).toHaveLength(3);
+    h.execute(batch([updateEntity({ ...mk(1), end: [99, 1, 0] }), deleteEntity(mk(2).id)], 'edit'));
+    expect(entityList(h.doc)).toHaveLength(2);
+    expect(replay(start, h.journal)).toEqual(h.doc);
+    h.undo();
+    expect(entityList(h.doc)).toHaveLength(3);
+    expect(h.doc.entities['b1']).toEqual(mk(1));
+    h.undo();
+    expect(entityList(h.doc)).toHaveLength(0);
+  });
+
+  it('is all-or-nothing: a failing step leaves the document unchanged', () => {
+    const h = new History(createDocument());
+    h.execute(addEntity(mk(1)));
+    const before = h.doc;
+    expect(() => h.execute(batch([deleteEntity(mk(1).id), deleteEntity('missing' as EntityId)]))).toThrow(/does not exist/);
+    expect(h.doc).toBe(before);
+  });
+});

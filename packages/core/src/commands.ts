@@ -77,6 +77,28 @@ export function updateEntity(next: Entity): Command {
   };
 }
 
+/**
+ * Several commands as one undo step (a MOVE of 50 entities undoes at once).
+ * Applied in order; if any step fails, nothing changes. The inverse applies
+ * the inverses in reverse order.
+ */
+export function batch(commands: readonly Command[], label = 'batch'): Command {
+  return {
+    type: 'batch',
+    payload: { label, commands: commands.map((c) => ({ type: c.type, payload: c.payload })) },
+    apply(doc) {
+      let current = doc;
+      const inverses: Command[] = [];
+      for (const c of commands) {
+        const r = c.apply(current); // throws → caller's document is untouched
+        current = r.doc;
+        inverses.push(r.inverse);
+      }
+      return { doc: current, inverse: batch(inverses.reverse(), label) };
+    },
+  };
+}
+
 /** Rebuilds a command from its journal record. */
 export function commandFromRecord(record: { type: string; payload: unknown }): Command {
   switch (record.type) {
@@ -88,6 +110,10 @@ export function commandFromRecord(record: { type: string; payload: unknown }): C
       return deleteEntity((record.payload as { id: EntityId }).id);
     case 'updateEntity':
       return updateEntity((record.payload as { entity: Entity }).entity);
+    case 'batch': {
+      const p = record.payload as { label: string; commands: { type: string; payload: unknown }[] };
+      return batch(p.commands.map(commandFromRecord), p.label);
+    }
     default:
       throw new CommandError(`Unknown command type ${record.type}`);
   }

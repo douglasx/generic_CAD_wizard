@@ -7,3 +7,4 @@ export * from './primitives.ts';
 export * from './snap.ts';
 export * from './select.ts';
 export * from './grips.ts';
+export * from './transform.ts';
