@@ -33,7 +33,10 @@ Snaps, other entities, layers UI, attributes UI, parametric graph (M1+).
 | e2e Chromium (`pnpm e2e`) | 4/4 pass: draw/undo/redo, save/open `.cadw`, kernel in worker, offline reload + offline kernel |
 | Web bundle | Initial JS 214 KB gzip; kernel WASM 42.7 MB raw / 12.4 MB gzip, lazy in the CAD worker, precached |
 | Desktop (Linux, Tauri 2) | `.deb` 12.6 MB and AppImage built; smoke test: draws, autosaves, kernel box 1,000,000 mm³ in 2.7 s — see `docs/images/m0-desktop-linux.png` |
-| Desktop (macOS, Windows) | Build via `pnpm desktop:build` on each OS or the Desktop CI workflow — not yet run |
+| Desktop (macOS) | Built and run on macOS 2026-09-20; native save/open verified manually (`samples/*.cadw` load with the correct entity counts). DMG bundling needs `pnpm desktop:build:dmg` — see the desktop README. |
+| Desktop (Windows) | Not yet run; use the Desktop CI workflow |
 | STEP attributes | Round trip passes (text, real, integer, non-ASCII); reference file `corpus/step/plate-attributes.step` |
 
 Known limitation: native dialogs cannot be automated, so desktop save/open (REQ-009.1) needs one manual check on your Mac.
+
+**Accepted 2026-09-20** by Douglas: web app, desktop app, drawing, autosave, save/open and the kernel check all verified on macOS.
