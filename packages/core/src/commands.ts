@@ -98,23 +98,3 @@ export function batch(commands: readonly Command[], label = 'batch'): Command {
     },
   };
 }
-
-/** Rebuilds a command from its journal record. */
-export function commandFromRecord(record: { type: string; payload: unknown }): Command {
-  switch (record.type) {
-    case 'addEntity': {
-      const p = record.payload as { entity: Entity; index?: number };
-      return addEntity(p.entity, p.index);
-    }
-    case 'deleteEntity':
-      return deleteEntity((record.payload as { id: EntityId }).id);
-    case 'updateEntity':
-      return updateEntity((record.payload as { entity: Entity }).entity);
-    case 'batch': {
-      const p = record.payload as { label: string; commands: { type: string; payload: unknown }[] };
-      return batch(p.commands.map(commandFromRecord), p.label);
-    }
-    default:
-      throw new CommandError(`Unknown command type ${record.type}`);
-  }
-}

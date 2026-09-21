@@ -1,5 +1,5 @@
 import type { Command } from './commands.ts';
-import { commandFromRecord } from './commands.ts';
+import { commandFromRecord } from './journal.ts';
 import type { CadDocument } from './model.ts';
 
 export interface JournalRecord {
