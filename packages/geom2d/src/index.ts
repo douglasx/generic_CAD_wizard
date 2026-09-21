@@ -5,3 +5,5 @@ export * from './curves.ts';
 export * from './entities.ts';
 export * from './primitives.ts';
 export * from './snap.ts';
+export * from './select.ts';
+export * from './grips.ts';

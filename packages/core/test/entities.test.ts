@@ -115,3 +115,30 @@ describe('migration v1 → v2 (guardrail 3)', () => {
 
 export const entitySamples = samples;
 export type { ArcEntity, CircleEntity, EllipseEntity, PolylineEntity, SplineEntity };
+
+import { updateEntity, replay } from '../src/index.ts';
+
+describe('updateEntity (REQ-003.7)', () => {
+  it('replaces an entity; undo restores it exactly; journal replays', () => {
+    const start = createDocument();
+    const h = new History(start);
+    const l = { id: 'u1' as EntityId, kind: 'line' as const, layer: '0', start: [0, 0, 0] as const, end: [10, 0, 0] as const };
+    h.execute(addEntity(l));
+    h.execute(updateEntity({ ...l, end: [20, 5, 0] }));
+    expect(h.doc.entities['u1']).toMatchObject({ end: [20, 5, 0] });
+    h.undo();
+    expect(h.doc.entities['u1']).toEqual(l);
+    h.redo();
+    expect(replay(start, h.journal)).toEqual(h.doc);
+  });
+
+  it('refuses unknown ids, kind changes and locked layers', () => {
+    const h = new History(createDocument());
+    const l = { id: 'u2' as EntityId, kind: 'line' as const, layer: '0', start: [0, 0, 0] as const, end: [1, 0, 0] as const };
+    expect(() => h.execute(updateEntity(l))).toThrow(/does not exist/);
+    h.execute(addEntity(l));
+    expect(() => h.execute(updateEntity({ id: 'u2' as EntityId, kind: 'circle', layer: '0', center: [0, 0, 0], radius: 1 }))).toThrow(/Cannot change/);
+    const locked = new History({ ...h.doc, layers: { '0': { ...DEFAULT_LAYER, locked: true } } });
+    expect(() => locked.execute(updateEntity({ ...l, end: [2, 0, 0] }))).toThrow(/locked/);
+  });
+});
