@@ -22,6 +22,8 @@
     "spike:step-attributes": "node tools/spikes/step-attributes.ts",
     "desktop:dev": "pnpm --filter @cadw/desktop tauri dev",
     "desktop:build": "pnpm --filter @cadw/desktop tauri build",
+    "desktop:build:app": "pnpm --filter @cadw/desktop tauri build --bundles app",
+    "desktop:build:dmg": "CI=true pnpm --filter @cadw/desktop tauri build --bundles app,dmg",
     "check": "pnpm typecheck && pnpm lint:layers && pnpm test"
   },
   "devDependencies": {
