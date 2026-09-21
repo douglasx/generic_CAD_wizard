@@ -39,6 +39,7 @@ export const ellipseTool: ToolDefinition<EllipseState> = {
   lastPoint: (s) => (s.step === 'center' ? null : s.center),
   handle(s, input, ctx) {
     if (input.type === 'enter') return { state: s, done: true };
+    if (input.type === 'number') return { state: s, error: 'Expected a point' };
     if (input.type === 'word') return { state: s, error: `Invalid option ${input.value}` };
     const p = input.point;
     if (s.step === 'center') return { state: { step: 'axis', center: p } };

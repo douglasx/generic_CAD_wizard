@@ -8,7 +8,7 @@ import { CommandLine, type CommandLineHandle } from './CommandLine.tsx';
 import { DEFAULT_SETTINGS, parseSettings, resolveCursor, SNAP_LABELS, type DraftSettings } from './cursor.ts';
 import { DraftingBar } from './DraftingBar.tsx';
 import { combineSelection, EMPTY_SELECTION, pruneSelection, type Selection } from './selection.ts';
-import { DRAW_TOOLS } from './commands/draw-tools.ts';
+import { DRAW_TOOLS, MODIFY_TOOLS } from './commands/draw-tools.ts';
 import { CommandSession } from './commands/session.ts';
 import { getKernel } from './kernel-session.ts';
 
@@ -28,7 +28,16 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   const viewportRef = useRef<Viewport | null>(null);
   const cmdRef = useRef<CommandLineHandle>(null);
   const historyRef = useRef(new History(createDocument()));
-  const session = useMemo(() => new CommandSession(historyRef.current, randomIds, DRAW_TOOLS), []);
+  // The session reads and replaces the selection through this port (set below, once state exists).
+  const selectionPortRef = useRef<{ get(): readonly EntityId[]; set(ids: readonly EntityId[]): void }>({ get: () => [], set: () => {} });
+  const session = useMemo(
+    () =>
+      new CommandSession(historyRef.current, randomIds, [...DRAW_TOOLS, ...MODIFY_TOOLS], {
+        get: () => selectionPortRef.current.get(),
+        set: (ids) => selectionPortRef.current.set(ids),
+      }),
+    [],
+  );
   // Re-render whenever the session changes; read the live snapshot below.
   useSyncExternalStore(
     (cb) => session.subscribe(cb),
@@ -55,6 +64,10 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     selectionRef.current = next;
     setSelection(next);
   }, []);
+  selectionPortRef.current = {
+    get: () => [...selectionRef.current],
+    set: (ids) => selectionChanged(new Set(ids)),
+  };
 
   // Drafting settings persist per device (IndexedDB via the platform adapter).
   useEffect(() => {
@@ -224,11 +237,17 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       return;
     }
 
-    if (session.snapshot.activeTool) {
+    if (session.snapshot.activeTool && !session.wantsSelection) {
       const p = resolve(raw);
       cursorRef.current = p;
       setCursor([p[0], p[1], 0]);
       vp.setPreviewEntities(session.preview(p));
+    } else if (session.snapshot.activeTool) {
+      // "Select objects" step: plain cursor, no snaps, no grips.
+      vp.setSnapMarker(null);
+      setSnapHit(null);
+      cursorRef.current = raw;
+      setCursor([raw[0], raw[1], 0]);
     } else {
       // Idle: no snap markers; highlight a grip under the cursor.
       vp.setSnapMarker(null);
@@ -247,15 +266,15 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     if (!vp) return;
     const raw = modelAt(ev);
 
-    if (session.snapshot.activeTool) {
+    if (session.snapshot.activeTool && !session.wantsSelection) {
       const p = resolve(raw);
       cursorRef.current = p;
       session.point(p);
       return;
     }
     (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
-    // Shift always edits the selection, even over a grip.
-    const grip = ev.shiftKey ? null : gripAt(raw);
+    // Shift always edits the selection, even over a grip; no grip edits inside a command.
+    const grip = ev.shiftKey || session.snapshot.activeTool ? null : gripAt(raw);
     if (grip) {
       gestureRef.current = { kind: 'grip', id: grip.id, index: grip.index, from: grip.point };
       return;
@@ -296,11 +315,15 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       const box = boxFrom(g.downModel, modelAt(ev));
       const crossing = ev.clientX < g.downScreen[0];
       const hits = crossing ? crossingSelect(box, candidates, tol) : windowSelect(box, candidates, tol);
-      selectionChanged(combineSelection(selectionRef.current, hits, g.shift ? 'add' : 'replace'));
+      // Inside a command's "Select objects" step, picks accumulate (AutoCAD); Shift removes.
+      const inCommand = !!session.snapshot.activeTool;
+      const mode = inCommand ? (g.shift ? 'toggle' : 'add') : g.shift ? 'add' : 'replace';
+      selectionChanged(combineSelection(selectionRef.current, hits, mode));
     } else {
+      const inCommand = !!session.snapshot.activeTool;
       const hit = pickEntity(g.downModel, candidates, PICK_PIXELS * vp.unitsPerPixel, tol);
-      if (hit) selectionChanged(combineSelection(selectionRef.current, [hit], g.shift ? 'toggle' : 'replace'));
-      else if (!g.shift) selectionChanged(EMPTY_SELECTION);
+      if (hit) selectionChanged(combineSelection(selectionRef.current, [hit], g.shift ? 'toggle' : inCommand ? 'add' : 'replace'));
+      else if (!g.shift && !inCommand) selectionChanged(EMPTY_SELECTION);
     }
   };
 
@@ -332,8 +355,10 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         return;
       }
       const target = ev.target as HTMLElement | null;
-      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
       const mod = ev.ctrlKey || ev.metaKey;
+      const inEmptyCmdline = target instanceof HTMLInputElement && target.dataset['cmdline'] === 'true' && target.value === '';
+      const isUndoRedo = mod && /^[zy]$/i.test(ev.key);
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') && !(inEmptyCmdline && isUndoRedo)) return;
       if (mod && ev.key.toLowerCase() === 'z') {
         ev.preventDefault();
         if (ev.shiftKey) session.redo();
@@ -344,6 +369,9 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       } else if (ev.key === 'Escape') {
         if (session.snapshot.activeTool) session.cancel();
         else selectionChanged(EMPTY_SELECTION);
+      } else if ((ev.key === 'Delete' || ev.key === 'Backspace') && !session.snapshot.activeTool && selectionRef.current.size > 0) {
+        ev.preventDefault();
+        session.run('ERASE');
       } else if (ev.key === 'Enter' || ev.key === ' ') {
         ev.preventDefault();
         session.enter();
@@ -417,6 +445,12 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       <header className="toolbar">
         <strong className="brand">CAD Wizard</strong>
         {DRAW_TOOLS.map((t) => (
+          <button key={t.name} aria-pressed={live.activeTool === t.name} onClick={() => session.run(t.name)} title={`${t.label} (${t.aliases.join(', ')})`}>
+            {t.label}
+          </button>
+        ))}
+        <span className="sep" />
+        {MODIFY_TOOLS.map((t) => (
           <button key={t.name} aria-pressed={live.activeTool === t.name} onClick={() => session.run(t.name)} title={`${t.label} (${t.aliases.join(', ')})`}>
             {t.label}
           </button>

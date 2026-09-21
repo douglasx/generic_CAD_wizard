@@ -1,7 +1,7 @@
-import { CommandError, type Entity, type History, type IdGenerator } from '@cadw/core';
+import { CommandError, type Entity, type EntityId, type History, type IdGenerator } from '@cadw/core';
 import type { Vec2 } from '@cadw/geom2d';
 import { parseInput, pointAlong } from './parse.ts';
-import { idsFrom, type AnyTool, type ToolContext, type ToolInput } from './tool.ts';
+import { idsFrom, type AnyTool, type ToolContext, type ToolInput, type ToolResult } from './tool.ts';
 
 export interface SessionSnapshot {
   readonly prompt: string;
@@ -10,6 +10,14 @@ export interface SessionSnapshot {
 }
 
 const IDLE_PROMPT = 'Command:';
+
+/** How the session reads and replaces the app's selection. */
+export interface SelectionPort {
+  get(): readonly EntityId[];
+  set(ids: readonly EntityId[]): void;
+}
+
+const NO_SELECTION: SelectionPort = { get: () => [], set: () => {} };
 const LOG_LIMIT = 200;
 
 /**
@@ -28,8 +36,11 @@ export class CommandSession {
   private readonly listeners = new Set<() => void>();
   private revision = 0;
 
-  constructor(history: History, ids: IdGenerator, tools: readonly AnyTool[]) {
+  private readonly selectionPort: SelectionPort;
+
+  constructor(history: History, ids: IdGenerator, tools: readonly AnyTool[], selection: SelectionPort = NO_SELECTION) {
     this.history = history;
+    this.selectionPort = selection;
     this.newId = idsFrom(ids);
     for (const t of tools) {
       this.tools.set(t.name, t);
@@ -48,6 +59,11 @@ export class CommandSession {
   /** Increments on every change; lets React subscribe cheaply. */
   get version(): number {
     return this.revision;
+  }
+
+  /** True while the active tool is collecting a selection (the app routes clicks to selecting). */
+  get wantsSelection(): boolean {
+    return !!this.tool?.wantsSelection?.(this.state);
   }
 
   get lastPoint(): Vec2 | null {
@@ -71,7 +87,9 @@ export class CommandSession {
     this.state = tool.init(this.ctx());
     this.lastCommand = tool.name;
     this.log(`Command: ${tool.name}`);
-    this.emit();
+    const started = tool.start?.(this.state, this.ctx());
+    if (started) this.apply(started);
+    else this.emit();
     return true;
   }
 
@@ -107,6 +125,7 @@ export class CommandSession {
       case 'point':
         return this.feed({ type: 'point', point: parsed.point });
       case 'distance': {
+        if (this.tool.wantsNumber?.(this.state)) return this.feed({ type: 'number', value: parsed.value });
         const base = this.lastPoint;
         if (!base) {
           this.log('A distance needs a previous point.');
@@ -127,7 +146,7 @@ export class CommandSession {
 
   /** A mouse click in the viewport (already snapped). */
   point(p: Vec2): void {
-    if (!this.tool) return;
+    if (!this.tool || this.wantsSelection) return;
     this.feed({ type: 'point', point: p });
   }
 
@@ -165,7 +184,10 @@ export class CommandSession {
   private feed(input: ToolInput): void {
     const tool = this.tool;
     if (!tool) return;
-    const result = tool.handle(this.state, input, this.ctx());
+    this.apply(tool.handle(this.state, input, this.ctx()));
+  }
+
+  private apply(result: ToolResult<unknown>): void {
     try {
       for (const c of result.commands ?? []) this.history.execute(c);
     } catch (e) {
@@ -175,6 +197,7 @@ export class CommandSession {
       return;
     }
     this.state = result.state;
+    if (result.selection) this.selectionPort.set(result.selection);
     if (result.error) this.log(result.error);
     if (result.done) {
       this.tool = null;
@@ -184,7 +207,9 @@ export class CommandSession {
   }
 
   private ctx(): ToolContext {
-    return { doc: this.history.doc, newId: this.newId };
+    const doc = this.history.doc;
+    const selected = new Set(this.selectionPort.get());
+    return { doc, newId: this.newId, selection: doc.order.filter((id) => selected.has(id)) };
   }
 
   private log(line: string): void {

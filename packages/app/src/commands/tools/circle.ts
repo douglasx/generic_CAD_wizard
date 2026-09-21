@@ -37,6 +37,7 @@ export const circleTool: ToolDefinition<CircleState> = {
   lastPoint: (s) => (s.step === 'radius' ? s.center : s.step === 'diam2' ? s.first : null),
   handle(s, input, ctx) {
     if (input.type === 'enter') return { state: s, done: true };
+    if (input.type === 'number') return { state: s, error: 'Expected a point' };
     if (input.type === 'word') {
       if (s.step === 'center' && input.value === '2P') return { state: { step: 'diam1' } };
       return { state: s, error: `Invalid option ${input.value}` };

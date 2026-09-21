@@ -36,6 +36,7 @@ export const splineTool: ToolDefinition<SplineState> = {
           : [],
     });
     if (input.type === 'enter') return commit(false);
+    if (input.type === 'number') return { state: s, error: 'Expected a point' };
     if (input.type === 'word') {
       if (input.value === 'U' || input.value === 'UNDO') {
         if (s.points.length === 0) return { state: s, error: 'Nothing to undo' };

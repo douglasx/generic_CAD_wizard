@@ -39,6 +39,8 @@ export const CommandLine = forwardRef<CommandLineHandle, Props>(function Command
 
   const onKeyDown = (ev: React.KeyboardEvent<HTMLInputElement>) => {
     if (/^F\d{1,2}$/.test(ev.key)) return; // function keys (F3/F8/F9) reach the app
+    // With nothing typed, Ctrl/Cmd+Z and +Y undo the drawing, not the text box.
+    if ((ev.ctrlKey || ev.metaKey) && /^[zy]$/i.test(ev.key) && value === '') return;
     if (ev.key === 'Enter' || ev.key === ' ') {
       ev.preventDefault();
       submit();
@@ -73,6 +75,7 @@ export const CommandLine = forwardRef<CommandLineHandle, Props>(function Command
         <input
           ref={inputRef}
           data-testid="command-input"
+          data-cmdline="true"
           value={value}
           spellCheck={false}
           autoComplete="off"

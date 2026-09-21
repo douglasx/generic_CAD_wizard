@@ -8,12 +8,16 @@ import type { Vec2 } from '@cadw/geom2d';
  */
 export type ToolInput =
   | { readonly type: 'point'; readonly point: Vec2 }
+  /** A bare typed number, delivered raw when the tool asks for one (angles, factors). */
+  | { readonly type: 'number'; readonly value: number }
   | { readonly type: 'word'; readonly value: string }
   | { readonly type: 'enter' };
 
 export interface ToolContext {
   readonly doc: CadDocument;
   newId(prefix: string): EntityId;
+  /** The current selection, in document order. */
+  readonly selection: readonly EntityId[];
 }
 
 export interface ToolResult<S> {
@@ -24,6 +28,8 @@ export interface ToolResult<S> {
   readonly done?: boolean;
   /** Shown on the command line; the tool keeps its state. */
   readonly error?: string;
+  /** Replace the selection (modify commands clear it when they finish). */
+  readonly selection?: readonly EntityId[];
 }
 
 export interface ToolDefinition<S> {
@@ -39,6 +45,12 @@ export interface ToolDefinition<S> {
   preview(state: S, cursor: Vec2, ctx: ToolContext): Entity[];
   /** Base point for @relative input and for bare distances. */
   lastPoint(state: S): Vec2 | null;
+  /** Runs right after init; lets ERASE act at once on a pre-selection. */
+  start?(state: S, ctx: ToolContext): ToolResult<S> | null;
+  /** True while the tool is asking the user to select objects. */
+  wantsSelection?(state: S): boolean;
+  /** True when a bare number means a value (angle, factor), not a distance. */
+  wantsNumber?(state: S): boolean;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -70,6 +70,7 @@ export const arcTool: ToolDefinition<ArcState> = {
   },
   handle(s, input, ctx) {
     if (input.type === 'enter') return { state: s, done: true };
+    if (input.type === 'number') return { state: s, error: 'Expected a point' };
     if (input.type === 'word') {
       const isCenter = input.value === 'C' || input.value === 'CENTER' || input.value === 'CE';
       if (isCenter && s.step === 'start') return { state: { step: 'center', start: null } };

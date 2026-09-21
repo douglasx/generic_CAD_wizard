@@ -31,6 +31,7 @@ export const lineTool: ToolDefinition<LineState> = {
   lastPoint: (s) => s.current,
   handle(s, input, ctx) {
     if (input.type === 'enter') return { state: s, done: true };
+    if (input.type === 'number') return { state: s, error: 'Expected a point' };
     if (input.type === 'word') {
       if (input.value === 'U' || input.value === 'UNDO') {
         const last = s.segments[s.segments.length - 1];
@@ -105,6 +106,7 @@ export const polylineTool: ToolDefinition<PlineState> = {
       done: true,
     });
     if (input.type === 'enter') return commit(false);
+    if (input.type === 'number') return { state: s, error: 'Expected a point' };
     if (input.type === 'word') {
       if (input.value === 'U' || input.value === 'UNDO') {
         if (s.points.length === 0) return { state: s, error: 'Nothing to undo' };
@@ -129,3 +131,5 @@ import { ellipseTool } from './tools/ellipse.ts';
 import { splineTool } from './tools/spline.ts';
 
 export const DRAW_TOOLS = [lineTool, polylineTool, arcTool, circleTool, ellipseTool, splineTool];
+
+export { MODIFY_TOOLS } from './tools/modify.ts';
