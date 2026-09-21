@@ -8,3 +8,4 @@ export * from './snap.ts';
 export * from './select.ts';
 export * from './grips.ts';
 export * from './transform.ts';
+export * from './edit.ts';
