@@ -3,4 +3,5 @@ export * from './vec.ts';
 export * from './segment.ts';
 export * from './curves.ts';
 export * from './entities.ts';
+export * from './primitives.ts';
 export * from './snap.ts';
