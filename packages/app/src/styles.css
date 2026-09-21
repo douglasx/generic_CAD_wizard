@@ -1,7 +1,7 @@
 :root { color-scheme: dark; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; font-size: 13px; }
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; background: #1d2127; color: #e6e6e6; }
-.app { display: grid; grid-template-rows: auto 1fr auto; height: 100%; }
+.app { display: grid; grid-template-rows: auto 1fr auto auto; height: 100%; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 6px 8px; background: #252a31; border-bottom: 1px solid #333a44; }
 .brand { margin-right: 8px; color: #4fc3f7; }
 .toolbar button { background: #2f3640; color: inherit; border: 1px solid #3d4552; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
@@ -14,3 +14,8 @@ html, body, #root { margin: 0; height: 100%; background: #1d2127; color: #e6e6e6
 .status .msg { flex: 1; color: #a9b4c2; }
 .online { color: #7bd88f; }
 .offline { color: #f0a35e; }
+.cmdline { background: #181c21; border-top: 1px solid #333a44; padding: 2px 8px 4px; font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 12px; }
+.cmdlog { list-style: none; margin: 0; padding: 0; color: #8b96a5; min-height: 3.6em; }
+.cmdlog li { white-space: pre; overflow: hidden; text-overflow: ellipsis; line-height: 1.2em; }
+.cmdprompt { display: flex; gap: 6px; align-items: center; color: #4fc3f7; }
+.cmdprompt input { flex: 1; background: transparent; border: none; outline: none; color: #e6e6e6; font: inherit; padding: 2px 0; }

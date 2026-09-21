@@ -1,31 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  addEntity,
-  createDocument,
-  entityList,
-  History,
-  randomIds,
-  type CadDocument,
-  type EntityId,
-  type Vec3,
-} from '@cadw/core';
-import { findSnap, flattenEntity, type Segment } from '@cadw/geom2d';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createDocument, entityList, History, randomIds, type CadDocument, type Vec3 } from '@cadw/core';
+import { findSnap, flattenEntity, type Segment, type Vec2 } from '@cadw/geom2d';
 import { readCadw, writeCadw } from '@cadw/io-native';
 import { CADW_FILE, type PlatformAdapter } from '@cadw/platform';
 import { Viewport, type ViewName } from '@cadw/render';
+import { CommandLine, type CommandLineHandle } from './CommandLine.tsx';
+import { DRAW_TOOLS } from './commands/draw-tools.ts';
+import { CommandSession } from './commands/session.ts';
 import { getKernel } from './kernel-session.ts';
 
 const AUTOSAVE_KEY = 'autosave.cadw';
 const SNAP_PIXELS = 10;
-type Tool = 'select' | 'line';
 
 export function App({ platform }: { platform: PlatformAdapter }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<Viewport | null>(null);
+  const cmdRef = useRef<CommandLineHandle>(null);
   const historyRef = useRef(new History(createDocument()));
+  const session = useMemo(() => new CommandSession(historyRef.current, randomIds, DRAW_TOOLS), []);
+  // Re-render whenever the session changes; read the live snapshot below.
+  useSyncExternalStore(
+    (cb) => session.subscribe(cb),
+    () => session.version,
+  );
   const [doc, setDoc] = useState<CadDocument>(historyRef.current.doc);
-  const [tool, setTool] = useState<Tool>('line');
-  const [start, setStart] = useState<Vec3 | null>(null);
+  const cursorRef = useRef<Vec2>([0, 0]);
   const [cursor, setCursor] = useState<Vec3>([0, 0, 0]);
   const [online, setOnline] = useState(navigator.onLine);
   const [kernelStatus, setKernelStatus] = useState('Kernel not loaded');
@@ -35,14 +34,17 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   const [autosave, setAutosave] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const saveChain = useRef<Promise<void>>(Promise.resolve());
 
-  // Viewport lifecycle
+  // Test hook for e2e: read the live document (only under automation).
+  useEffect(() => {
+    if (navigator.webdriver) (window as unknown as { __cadw: unknown }).__cadw = { doc: () => historyRef.current.doc };
+  }, []);
+
   useEffect(() => {
     const vp = new Viewport(hostRef.current!);
     viewportRef.current = vp;
     return () => vp.dispose();
   }, []);
 
-  // Restore autosave (works offline: IndexedDB)
   useEffect(() => {
     let cancelled = false;
     platform.storage
@@ -59,14 +61,12 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
   }, [platform]);
 
-  // History → React state, viewport and autosave
   useEffect(() => {
     const h = historyRef.current;
     const onChange = (d: CadDocument) => {
       setDoc(d);
       viewportRef.current?.setDocument(d);
       setAutosave('saving');
-      // Serialize writes so the latest document always wins.
       saveChain.current = saveChain.current
         .then(() => platform.storage.set(AUTOSAVE_KEY, writeCadw(d)))
         .then(
@@ -77,6 +77,15 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     viewportRef.current?.setDocument(h.doc);
     return h.subscribe(onChange);
   }, [platform]);
+
+  // Keep the rubber band in step with the active tool.
+  useEffect(
+    () =>
+      session.subscribe(() => {
+        viewportRef.current?.setPreviewEntities(session.preview(cursorRef.current));
+      }),
+    [session],
+  );
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -89,78 +98,63 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
   }, []);
 
-  const snapped = useCallback(
-    (p: Vec3): Vec3 => {
-      const vp = viewportRef.current;
-      if (!vp) return p;
-      const segments: Segment[] = entityList(historyRef.current.doc).flatMap((e) => {
-        const pts = flattenEntity(e, vp.unitsPerPixel);
-        const segs: Segment[] = [];
-        for (let i = 1; i < pts.length; i++) segs.push({ start: pts[i - 1]!, end: pts[i]! });
-        return segs;
-      });
-      const s = findSnap([p[0], p[1]], segments, SNAP_PIXELS * vp.unitsPerPixel);
-      return s ? [s.point[0], s.point[1], 0] : p;
-    },
-    [],
-  );
+  const snapped = useCallback((p: Vec3): Vec2 => {
+    const vp = viewportRef.current;
+    if (!vp) return [p[0], p[1]];
+    const segments: Segment[] = entityList(historyRef.current.doc).flatMap((e) => {
+      const pts = flattenEntity(e, vp.unitsPerPixel);
+      const segs: Segment[] = [];
+      for (let i = 1; i < pts.length; i++) segs.push({ start: pts[i - 1]!, end: pts[i]! });
+      return segs;
+    });
+    const s = findSnap([p[0], p[1]], segments, SNAP_PIXELS * vp.unitsPerPixel);
+    return s ? s.point : [p[0], p[1]];
+  }, []);
 
   const onPointerMove = (ev: React.PointerEvent) => {
     const vp = viewportRef.current;
     if (!vp) return;
     const p = snapped(vp.screenToModel(ev.clientX, ev.clientY));
-    setCursor(p);
-    if (tool === 'line' && start) vp.setPreview(start, p);
+    cursorRef.current = p;
+    setCursor([p[0], p[1], 0]);
+    vp.setPreviewEntities(session.preview(p));
   };
 
   const onPointerDown = (ev: React.PointerEvent) => {
-    if (ev.button !== 0 || tool !== 'line') return;
+    if (ev.button !== 0) return;
     const vp = viewportRef.current;
     if (!vp) return;
     const p = snapped(vp.screenToModel(ev.clientX, ev.clientY));
-    if (!start) {
-      setStart(p);
-      return;
-    }
-    if (Math.hypot(p[0] - start[0], p[1] - start[1]) > 1e-9) {
-      historyRef.current.execute(
-        addEntity({
-          id: randomIds.next('line') as EntityId,
-          kind: 'line',
-          layer: historyRef.current.doc.currentLayer,
-          start,
-          end: p,
-        }),
-      );
-    }
-    setStart(null);
-    vp.setPreview(null, null);
+    cursorRef.current = p;
+    session.point(p);
   };
 
-  const cancel = useCallback(() => {
-    setStart(null);
-    viewportRef.current?.setPreview(null, null);
-  }, []);
-
-  const undo = useCallback(() => historyRef.current.undo(), []);
-  const redo = useCallback(() => historyRef.current.redo(), []);
-
+  // Keyboard: typing anywhere goes to the command line (AutoCAD behaviour).
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
+      const target = ev.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
       const mod = ev.ctrlKey || ev.metaKey;
       if (mod && ev.key.toLowerCase() === 'z') {
         ev.preventDefault();
-        if (ev.shiftKey) redo();
-        else undo();
+        if (ev.shiftKey) session.redo();
+        else session.undo();
       } else if (mod && ev.key.toLowerCase() === 'y') {
         ev.preventDefault();
-        redo();
-      } else if (ev.key === 'Escape') cancel();
-      else if (!mod && ev.key.toLowerCase() === 'l') setTool('line');
+        session.redo();
+      } else if (ev.key === 'Escape') {
+        session.cancel();
+      } else if (ev.key === 'Enter' || ev.key === ' ') {
+        ev.preventDefault();
+        session.enter();
+      } else if (!mod && !ev.altKey && ev.key.length === 1) {
+        ev.preventDefault();
+        cmdRef.current?.typeKey(ev.key);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, cancel]);
+  }, [session]);
 
   const save = async () => {
     try {
@@ -175,6 +169,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     try {
       const file = await platform.openFile(CADW_FILE);
       if (!file) return;
+      session.cancel();
       historyRef.current.reset(readCadw(file.bytes));
       setMessage(`Opened ${file.name}`);
     } catch (e) {
@@ -183,7 +178,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   };
 
   const newDoc = () => {
-    cancel();
+    session.cancel();
     historyRef.current.reset(createDocument());
     viewportRef.current?.setMeshes([]);
     setMessage('New drawing');
@@ -216,15 +211,17 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   };
 
   const h = historyRef.current;
+  const live = session.snapshot;
   return (
     <div className="app" data-ready={restored ? 'true' : 'false'}>
       <header className="toolbar">
         <strong className="brand">CAD Wizard</strong>
-        <button aria-pressed={tool === 'line'} onClick={() => setTool('line')} title="Line (L)">Line</button>
-        <button aria-pressed={tool === 'select'} onClick={() => { cancel(); setTool('select'); }}>Select</button>
+        <button aria-pressed={live.activeTool === 'LINE'} onClick={() => session.run('LINE')} title="Line (L)">Line</button>
+        <button aria-pressed={live.activeTool === 'PLINE'} onClick={() => session.run('PLINE')} title="Polyline (PL)">Polyline</button>
+        <button aria-pressed={live.activeTool === null} onClick={() => session.cancel()} title="Select (Esc)">Select</button>
         <span className="sep" />
-        <button onClick={undo} disabled={!h.canUndo} title="Undo (Ctrl+Z)">Undo</button>
-        <button onClick={redo} disabled={!h.canRedo} title="Redo (Ctrl+Y)">Redo</button>
+        <button onClick={() => session.undo()} disabled={!h.canUndo} title="Undo (Ctrl+Z)">Undo</button>
+        <button onClick={() => session.redo()} disabled={!h.canRedo} title="Redo (Ctrl+Y)">Redo</button>
         <span className="sep" />
         <button onClick={newDoc}>New</button>
         <button onClick={openFile}>Open</button>
@@ -241,6 +238,12 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         data-testid="viewport"
         onPointerMove={onPointerMove}
         onPointerDown={onPointerDown}
+      />
+      <CommandLine
+        ref={cmdRef}
+        snapshot={live}
+        onSubmit={(text) => session.submit(text, cursorRef.current)}
+        onCancel={() => session.cancel()}
       />
       <footer className="status">
         <span data-testid="entity-count">{entityList(doc).length} entities</span>

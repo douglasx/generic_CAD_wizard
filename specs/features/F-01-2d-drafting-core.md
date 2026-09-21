@@ -69,3 +69,10 @@ Each slice is one PR under ~400 changed lines, with `pnpm check` and the e2e sui
 
 1. Lineweight display default: true millimetre width on screen, or a fixed thin display until printing (AutoCAD's LWDISPLAY off)? Proposal: fixed thin on screen, true width in print preview and PDF.
 2. Spline type for M1: interpolating through picked points (proposal) or control-point NURBS editing?
+
+## Progress
+
+| Slice | Status | Commit notes |
+| --- | --- | --- |
+| 1 Entity model + rendering | Done 2026-09-20 | 6 entity kinds, schema v2 + v1 migration, curve flattening (ADR 0008) |
+| 2 Command line + coordinates | Done 2026-09-21 | Parser (`100,50`, `@dx,dy`, `@d<a`, `d<a`, bare distance), `CommandSession`, LINE/PLINE with Close/Undo, aliases, Enter repeats, U/REDO, Up-arrow recall; typed and mouse paths proven identical |

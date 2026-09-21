@@ -10,9 +10,11 @@ async function ready(page: Page) {
 
 async function drawLine(page: Page, from: [number, number], to: [number, number]) {
   const box = (await page.getByTestId('viewport').boundingBox())!;
+  await page.getByRole('button', { name: 'Line', exact: true }).click();
   await page.mouse.click(box.x + from[0], box.y + from[1]);
   await page.mouse.move(box.x + (from[0] + to[0]) / 2, box.y + (from[1] + to[1]) / 2);
   await page.mouse.click(box.x + to[0], box.y + to[1]);
+  await page.keyboard.press('Escape');
 }
 
 test('draws a line, undoes and redoes it (REQ-003.1)', async ({ page }) => {

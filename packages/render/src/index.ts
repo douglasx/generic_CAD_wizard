@@ -19,7 +19,7 @@ export class Viewport {
   private readonly camera: THREE.OrthographicCamera;
   private readonly linesGroup = new THREE.Group();
   private readonly meshGroup = new THREE.Group();
-  private preview: THREE.Line | null = null;
+  private preview: THREE.Object3D | null = null;
   private halfHeight = 250; // mm visible above/below centre
   private readonly target = new THREE.Vector3(0, 0, 0);
   private view: ViewName = 'top';
@@ -67,15 +67,22 @@ export class Viewport {
     if (this.lastDoc) this.setDocument(this.lastDoc);
   }
 
-  setPreview(start: Vec3 | null, end: Vec3 | null): void {
+  /** Rubber-band entities for the active tool, drawn in the preview colour. */
+  setPreviewEntities(entities: readonly Entity[]): void {
     if (this.preview) {
       this.scene.remove(this.preview);
       disposeObject(this.preview);
       this.preview = null;
     }
-    if (start && end) {
-      this.preview = makeLine(start, end, new THREE.Color(0x4fc3f7));
-      this.scene.add(this.preview);
+    if (entities.length > 0) {
+      const group = new THREE.Group();
+      const tolerance = Math.max(this.unitsPerPixel * 0.25, 1e-6);
+      for (const e of entities) {
+        const object = makeEntityObject(e, { color: '#4fc3f7', linetype: 'continuous' }, tolerance);
+        if (object) group.add(object);
+      }
+      this.preview = group;
+      this.scene.add(group);
     }
     this.requestRender();
   }
@@ -193,11 +200,6 @@ export class Viewport {
     cancelAnimationFrame(this.frame);
     this.frame = requestAnimationFrame(() => this.renderer.render(this.scene, this.camera));
   }
-}
-
-function makeLine(a: Vec3, b: Vec3, color: THREE.Color): THREE.Line {
-  const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]);
-  return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));
 }
 
 /**
