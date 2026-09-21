@@ -45,9 +45,11 @@ test('intersection and centre snaps', async ({ page }) => {
   await ready(page);
   await type(page, 'L', '-100,-100', '100,100', '');
   await type(page, 'L', '-100,100', '100,-100', '');
+  await type(page, 'C', '200,0', '40');
+  // Snap markers show while a tool is active (idle hover shows grips instead, as in AutoCAD).
+  await type(page, 'L');
   await hover(page, 0, 0, 3, 2);
   await expect(page.getByTestId('snap-kind')).toHaveText('Intersection');
-  await type(page, 'C', '200,0', '40');
   await hover(page, 200, 0, 2, 2);
   await expect(page.getByTestId('snap-kind')).toHaveText('Center');
 });

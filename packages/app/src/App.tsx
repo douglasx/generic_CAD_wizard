@@ -1,18 +1,27 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { createDocument, entityList, History, randomIds, type CadDocument, type Vec3 } from '@cadw/core';
-import type { Snap, Vec2 } from '@cadw/geom2d';
+import { createDocument, entityList, History, randomIds, updateEntity, visibleEntities, type CadDocument, type EntityId, type Vec3 } from '@cadw/core';
+import { boxFrom, crossingSelect, gripsOf, moveGrip, pickEntity, windowSelect, type Snap, type Vec2 } from '@cadw/geom2d';
 import { readCadw, writeCadw } from '@cadw/io-native';
 import { CADW_FILE, type PlatformAdapter } from '@cadw/platform';
 import { Viewport, type ViewName } from '@cadw/render';
 import { CommandLine, type CommandLineHandle } from './CommandLine.tsx';
 import { DEFAULT_SETTINGS, parseSettings, resolveCursor, SNAP_LABELS, type DraftSettings } from './cursor.ts';
 import { DraftingBar } from './DraftingBar.tsx';
+import { combineSelection, EMPTY_SELECTION, pruneSelection, type Selection } from './selection.ts';
 import { DRAW_TOOLS } from './commands/draw-tools.ts';
 import { CommandSession } from './commands/session.ts';
 import { getKernel } from './kernel-session.ts';
 
 const AUTOSAVE_KEY = 'autosave.cadw';
 const SETTINGS_KEY = 'settings.json';
+const PICK_PIXELS = 5;
+const GRIP_PIXELS = 7;
+const DRAG_PIXELS = 4;
+
+type Gesture =
+  | { kind: 'box'; downScreen: Vec2; downModel: Vec2; shift: boolean; dragging: boolean }
+  | { kind: 'grip'; id: EntityId; index: number; from: Vec2 }
+  | null;
 
 export function App({ platform }: { platform: PlatformAdapter }) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -39,6 +48,13 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   const settingsRef = useRef(settings);
   const rawCursorRef = useRef<Vec2>([0, 0]);
   const [snapHit, setSnapHit] = useState<Snap | null>(null);
+  const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  const selectionRef = useRef<Selection>(EMPTY_SELECTION);
+  const gestureRef = useRef<Gesture>(null);
+  const selectionChanged = useCallback((next: Selection) => {
+    selectionRef.current = next;
+    setSelection(next);
+  }, []);
 
   // Drafting settings persist per device (IndexedDB via the platform adapter).
   useEffect(() => {
@@ -64,6 +80,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       (window as unknown as { __cadw: unknown }).__cadw = {
         doc: () => historyRef.current.doc,
         toScreen: (x: number, y: number) => viewportRef.current?.modelToScreen(x, y),
+        selection: () => [...selectionRef.current],
       };
   }, []);
 
@@ -93,6 +110,8 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     const h = historyRef.current;
     const onChange = (d: CadDocument) => {
       setDoc(d);
+      const pruned = pruneSelection(selectionRef.current, d);
+      if (pruned !== selectionRef.current) selectionChanged(pruned);
       viewportRef.current?.setDocument(d);
       setAutosave('saving');
       saveChain.current = saveChain.current
@@ -104,7 +123,20 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
     viewportRef.current?.setDocument(h.doc);
     return h.subscribe(onChange);
-  }, [platform]);
+  }, [platform, selectionChanged]);
+
+  // Selection highlight and grips follow the selection and the document.
+  const gripPoints = useCallback((): Vec2[] => {
+    const d = historyRef.current.doc;
+    return [...selectionRef.current].flatMap((id) => {
+      const e = d.entities[id];
+      return e ? gripsOf(e).map((g) => g.point) : [];
+    });
+  }, []);
+  useEffect(() => {
+    viewportRef.current?.setSelection(selection);
+    viewportRef.current?.setGrips(gripPoints());
+  }, [selection, doc, gripPoints]);
 
   // Keep the rubber band in step with the active tool.
   useEffect(
@@ -139,25 +171,137 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     [session],
   );
 
+  const modelAt = (ev: React.PointerEvent): Vec2 => {
+    const m = viewportRef.current!.screenToModel(ev.clientX, ev.clientY);
+    return [m[0], m[1]];
+  };
+
+  /** Grip under the cursor, among the selected entities. */
+  const gripAt = (p: Vec2): { id: EntityId; index: number; point: Vec2 } | null => {
+    const vp = viewportRef.current;
+    if (!vp) return null;
+    const r = GRIP_PIXELS * vp.unitsPerPixel;
+    const d = historyRef.current.doc;
+    let best: { id: EntityId; index: number; point: Vec2; dist: number } | null = null;
+    for (const id of selectionRef.current) {
+      const e = d.entities[id];
+      if (!e) continue;
+      for (const g of gripsOf(e)) {
+        const dist = Math.hypot(g.point[0] - p[0], g.point[1] - p[1]);
+        if (dist <= r && (!best || dist < best.dist)) best = { id, index: g.index, point: g.point, dist };
+      }
+    }
+    return best;
+  };
+
   const onPointerMove = (ev: React.PointerEvent) => {
     const vp = viewportRef.current;
     if (!vp) return;
-    const m = vp.screenToModel(ev.clientX, ev.clientY);
-    rawCursorRef.current = [m[0], m[1]];
-    const p = resolve([m[0], m[1]]);
-    cursorRef.current = p;
-    setCursor([p[0], p[1], 0]);
-    vp.setPreviewEntities(session.preview(p));
+    const raw = modelAt(ev);
+    rawCursorRef.current = raw;
+    const g = gestureRef.current;
+
+    if (g?.kind === 'grip') {
+      // Snap while dragging, ignoring the entity being edited so it cannot snap to itself.
+      const d = historyRef.current.doc;
+      const others = entityList(d).filter((e) => e.id !== g.id);
+      const r = resolveCursor(raw, others, settingsRef.current, g.from, vp.unitsPerPixel);
+      vp.setSnapMarker(r.snap);
+      setSnapHit(r.snap);
+      const e = d.entities[g.id];
+      const edited = e ? moveGrip(e, g.index, r.point) : null;
+      vp.setPreviewEntities(edited ? [edited] : []);
+      cursorRef.current = r.point;
+      setCursor([r.point[0], r.point[1], 0]);
+      return;
+    }
+
+    if (g?.kind === 'box') {
+      const moved = Math.hypot(ev.clientX - g.downScreen[0], ev.clientY - g.downScreen[1]);
+      if (moved > DRAG_PIXELS) g.dragging = true;
+      if (g.dragging) vp.setSelectionBox(boxFrom(g.downModel, raw), ev.clientX < g.downScreen[0]);
+      setCursor([raw[0], raw[1], 0]);
+      return;
+    }
+
+    if (session.snapshot.activeTool) {
+      const p = resolve(raw);
+      cursorRef.current = p;
+      setCursor([p[0], p[1], 0]);
+      vp.setPreviewEntities(session.preview(p));
+    } else {
+      // Idle: no snap markers; highlight a grip under the cursor.
+      vp.setSnapMarker(null);
+      setSnapHit(null);
+      cursorRef.current = raw;
+      setCursor([raw[0], raw[1], 0]);
+      const hot = gripAt(raw);
+      const pts = gripPoints();
+      vp.setGrips(pts, hot ? pts.findIndex((q) => q[0] === hot.point[0] && q[1] === hot.point[1]) : -1);
+    }
   };
 
   const onPointerDown = (ev: React.PointerEvent) => {
     if (ev.button !== 0) return;
     const vp = viewportRef.current;
     if (!vp) return;
-    const m = vp.screenToModel(ev.clientX, ev.clientY);
-    const p = resolve([m[0], m[1]]);
-    cursorRef.current = p;
-    session.point(p);
+    const raw = modelAt(ev);
+
+    if (session.snapshot.activeTool) {
+      const p = resolve(raw);
+      cursorRef.current = p;
+      session.point(p);
+      return;
+    }
+    (ev.target as HTMLElement).setPointerCapture?.(ev.pointerId);
+    // Shift always edits the selection, even over a grip.
+    const grip = ev.shiftKey ? null : gripAt(raw);
+    if (grip) {
+      gestureRef.current = { kind: 'grip', id: grip.id, index: grip.index, from: grip.point };
+      return;
+    }
+    gestureRef.current = { kind: 'box', downScreen: [ev.clientX, ev.clientY], downModel: raw, shift: ev.shiftKey, dragging: false };
+  };
+
+  const onPointerUp = (ev: React.PointerEvent) => {
+    const vp = viewportRef.current;
+    const g = gestureRef.current;
+    gestureRef.current = null;
+    if (!vp || !g) return;
+
+    if (g.kind === 'grip') {
+      vp.setPreviewEntities([]);
+      vp.setSnapMarker(null);
+      setSnapHit(null);
+      const e = historyRef.current.doc.entities[g.id];
+      const edited = e ? moveGrip(e, g.index, cursorRef.current) : null;
+      if (!edited) {
+        setMessage('That grip edit would make the entity degenerate');
+        return;
+      }
+      if (JSON.stringify(edited) === JSON.stringify(e)) return;
+      try {
+        historyRef.current.execute(updateEntity(edited));
+      } catch (err) {
+        setMessage((err as Error).message);
+      }
+      return;
+    }
+
+    const d = historyRef.current.doc;
+    const tol = vp.unitsPerPixel * 0.25;
+    const candidates = visibleEntities(d).filter((e) => !d.layers[e.layer]?.locked);
+    if (g.dragging) {
+      vp.setSelectionBox(null);
+      const box = boxFrom(g.downModel, modelAt(ev));
+      const crossing = ev.clientX < g.downScreen[0];
+      const hits = crossing ? crossingSelect(box, candidates, tol) : windowSelect(box, candidates, tol);
+      selectionChanged(combineSelection(selectionRef.current, hits, g.shift ? 'add' : 'replace'));
+    } else {
+      const hit = pickEntity(g.downModel, candidates, PICK_PIXELS * vp.unitsPerPixel, tol);
+      if (hit) selectionChanged(combineSelection(selectionRef.current, [hit], g.shift ? 'toggle' : 'replace'));
+      else if (!g.shift) selectionChanged(EMPTY_SELECTION);
+    }
   };
 
   // Settings changes re-resolve the cursor so ortho/snap take effect immediately.
@@ -198,7 +342,8 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         ev.preventDefault();
         session.redo();
       } else if (ev.key === 'Escape') {
-        session.cancel();
+        if (session.snapshot.activeTool) session.cancel();
+        else selectionChanged(EMPTY_SELECTION);
       } else if (ev.key === 'Enter' || ev.key === ' ') {
         ev.preventDefault();
         session.enter();
@@ -209,7 +354,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [session, changeSettings]);
+  }, [session, changeSettings, selectionChanged]);
 
   const save = async () => {
     try {
@@ -296,6 +441,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         data-testid="viewport"
         onPointerMove={onPointerMove}
         onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
       />
       <CommandLine
         ref={cmdRef}
@@ -306,6 +452,7 @@ export function App({ platform }: { platform: PlatformAdapter }) {
       <footer className="status">
         <DraftingBar settings={settings} onChange={changeSettings} />
         <span data-testid="entity-count">{entityList(doc).length} entities</span>
+        <span data-testid="selection-count">{selection.size > 0 ? `${selection.size} selected` : ''}</span>
         <span className="snapkind" data-testid="snap-kind">{snapHit ? SNAP_LABELS[snapHit.kind] : ''}</span>
         <span>
           x {cursor[0].toFixed(2)} y {cursor[1].toFixed(2)} mm

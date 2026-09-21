@@ -9,6 +9,8 @@ export interface MeshInput {
 
 export type ViewName = 'top' | 'iso';
 
+const SELECTED_COLOR = '#5aa9ff';
+
 /**
  * three.js viewport. Orthographic camera, model units = mm.
  * Wheel zooms about the cursor; middle- or right-drag pans.
@@ -21,6 +23,9 @@ export class Viewport {
   private readonly meshGroup = new THREE.Group();
   private preview: THREE.Object3D | null = null;
   private marker: THREE.Object3D | null = null;
+  private selection: ReadonlySet<string> = new Set();
+  private gripsObject: THREE.Object3D | null = null;
+  private boxObject: THREE.Object3D | null = null;
   private halfHeight = 250; // mm visible above/below centre
   private readonly target = new THREE.Vector3(0, 0, 0);
   private view: ViewName = 'top';
@@ -56,7 +61,8 @@ export class Viewport {
     // Curves are flattened to a quarter of a pixel, so they stay smooth at any zoom.
     const tolerance = Math.max(this.unitsPerPixel * 0.25, 1e-6);
     for (const entity of visibleEntities(doc)) {
-      const object = makeEntityObject(entity, resolveStyle(doc, entity), tolerance);
+      const style = resolveStyle(doc, entity);
+      const object = makeEntityObject(entity, this.selection.has(entity.id) ? { ...style, color: SELECTED_COLOR } : style, tolerance);
       if (object) this.linesGroup.add(object);
     }
     this.lastDoc = doc;
@@ -112,6 +118,69 @@ export class Viewport {
       this.scene.add(object);
     }
     this.requestRender();
+  }
+
+  /** Highlight the selected entities (REQ-003.5). */
+  setSelection(ids: ReadonlySet<string>): void {
+    this.selection = ids;
+    this.refreshCurves();
+  }
+
+  /** Grip squares at fixed screen size (REQ-003.7); `hot` is the grip under the cursor. */
+  setGrips(points: readonly (readonly [number, number])[], hot = -1): void {
+    this.removeOverlay('gripsObject');
+    if (points.length > 0) {
+      const positions = new Float32Array(points.flatMap(([x, y]) => [x, y, 0]));
+      const colors = new Float32Array(points.flatMap((_, i) => (i === hot ? [1, 0.3, 0.25] : [0.24, 0.49, 1])));
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      const pts = new THREE.Points(g, new THREE.PointsMaterial({ size: 9, sizeAttenuation: false, vertexColors: true, depthTest: false }));
+      pts.renderOrder = 998;
+      this.gripsObject = pts;
+      this.scene.add(pts);
+    }
+    this.requestRender();
+  }
+
+  /**
+   * Selection rectangle: solid blue for a window (dragged left→right),
+   * dashed green for a crossing (dragged right→left), as in AutoCAD.
+   */
+  setSelectionBox(box: { min: readonly [number, number]; max: readonly [number, number] } | null, crossing = false): void {
+    this.removeOverlay('boxObject');
+    if (box) {
+      const [x0, y0] = box.min;
+      const [x1, y1] = box.max;
+      const group = new THREE.Group();
+      const outline = new THREE.BufferGeometry().setFromPoints(
+        [[x0, y0], [x1, y0], [x1, y1], [x0, y1], [x0, y0]].map(([x, y]) => new THREE.Vector3(x!, y!, 0)),
+      );
+      const color = crossing ? 0x5fd35f : 0x4f8cff;
+      const dash = 6 * this.unitsPerPixel;
+      const line = crossing
+        ? new THREE.Line(outline, new THREE.LineDashedMaterial({ color, dashSize: dash, gapSize: dash, depthTest: false }))
+        : new THREE.Line(outline, new THREE.LineBasicMaterial({ color, depthTest: false }));
+      if (crossing) line.computeLineDistances();
+      const fill = new THREE.Mesh(
+        new THREE.PlaneGeometry(x1 - x0, y1 - y0).translate((x0 + x1) / 2, (y0 + y1) / 2, 0),
+        new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.12, depthTest: false }),
+      );
+      group.add(fill, line);
+      group.renderOrder = 997;
+      this.boxObject = group;
+      this.scene.add(group);
+    }
+    this.requestRender();
+  }
+
+  private removeOverlay(key: 'gripsObject' | 'boxObject'): void {
+    const o = this[key];
+    if (o) {
+      this.scene.remove(o);
+      disposeObject(o);
+      this[key] = null;
+    }
   }
 
   /** Model point → client pixel coordinates (for tests and tooltips). */
