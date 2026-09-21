@@ -20,6 +20,7 @@
     "e2e": "playwright test",
     "spike:kernel-size": "python3 tools/spikes/kernel_size.py",
     "spike:step-attributes": "node tools/spikes/step-attributes.ts",
+    "corpus:make": "node tools/corpus/make-all-entities.ts",
     "desktop:dev": "pnpm --filter @cadw/desktop tauri dev",
     "desktop:build": "pnpm --filter @cadw/desktop tauri build",
     "desktop:build:app": "pnpm --filter @cadw/desktop tauri build --bundles app",

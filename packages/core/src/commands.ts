@@ -25,7 +25,9 @@ export function addEntity(entity: Entity, index?: number): Command {
     payload: { entity, index },
     apply(doc) {
       if (doc.entities[entity.id]) throw new CommandError(`Entity ${entity.id} already exists`);
-      if (!doc.layers[entity.layer]) throw new CommandError(`Layer ${entity.layer} does not exist`);
+      const layer = doc.layers[entity.layer];
+      if (!layer) throw new CommandError(`Layer ${entity.layer} does not exist`);
+      if (layer.locked) throw new CommandError(`Layer ${layer.name} is locked`);
       const order = [...doc.order];
       order.splice(index ?? order.length, 0, entity.id);
       return {
@@ -43,6 +45,7 @@ export function deleteEntity(id: EntityId): Command {
     apply(doc) {
       const entity = doc.entities[id];
       if (!entity) throw new CommandError(`Entity ${id} does not exist`);
+      if (doc.layers[entity.layer]?.locked) throw new CommandError(`Layer ${entity.layer} is locked`);
       const index = doc.order.indexOf(id);
       const { [id]: _removed, ...rest } = doc.entities;
       return {

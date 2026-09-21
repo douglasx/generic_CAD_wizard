@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { entityList, type CadDocument, type Vec3 } from '@cadw/core';
+import { LINETYPES, resolveStyle, visibleEntities, type CadDocument, type Entity, type Vec3 } from '@cadw/core';
+import { flattenEntity } from '@cadw/geom2d';
 
 export interface MeshInput {
   readonly positions: Float32Array;
@@ -22,6 +23,8 @@ export class Viewport {
   private halfHeight = 250; // mm visible above/below centre
   private readonly target = new THREE.Vector3(0, 0, 0);
   private view: ViewName = 'top';
+  private lastDoc: CadDocument | null = null;
+  private lastTolerance = 0;
   private readonly resizeObserver: ResizeObserver;
   private frame = 0;
 
@@ -49,11 +52,19 @@ export class Viewport {
 
   setDocument(doc: CadDocument): void {
     clearGroup(this.linesGroup);
-    const color = new THREE.Color(0xe6e6e6);
-    for (const e of entityList(doc)) {
-      if (e.kind === 'line') this.linesGroup.add(makeLine(e.start, e.end, color));
+    // Curves are flattened to a quarter of a pixel, so they stay smooth at any zoom.
+    const tolerance = Math.max(this.unitsPerPixel * 0.25, 1e-6);
+    for (const entity of visibleEntities(doc)) {
+      const object = makeEntityObject(entity, resolveStyle(doc, entity), tolerance);
+      if (object) this.linesGroup.add(object);
     }
+    this.lastDoc = doc;
     this.requestRender();
+  }
+
+  /** Re-flattens curves after a zoom change so they never look faceted. */
+  private refreshCurves(): void {
+    if (this.lastDoc) this.setDocument(this.lastDoc);
   }
 
   setPreview(start: Vec3 | null, end: Vec3 | null): void {
@@ -150,6 +161,12 @@ export class Viewport {
         this.target.x += before[0] - after[0];
         this.target.y += before[1] - after[1];
         this.updateCamera();
+        // Only re-flatten when the scale changed enough to matter.
+        const tol = this.unitsPerPixel * 0.25;
+        if (this.lastTolerance === 0 || tol < this.lastTolerance / 2 || tol > this.lastTolerance * 2) {
+          this.lastTolerance = tol;
+          this.refreshCurves();
+        }
       },
       { passive: false },
     );
@@ -181,6 +198,28 @@ export class Viewport {
 function makeLine(a: Vec3, b: Vec3, color: THREE.Color): THREE.Line {
   const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(...a), new THREE.Vector3(...b)]);
   return new THREE.Line(g, new THREE.LineBasicMaterial({ color }));
+}
+
+/**
+ * One entity as a three.js object. Lineweight is shown thin on screen
+ * (AutoCAD's LWDISPLAY off); true widths appear in print (M3).
+ * Dashed linetypes are drawn in model units, so patterns keep their real size.
+ */
+function makeEntityObject(entity: Entity, style: { color: string; linetype: string }, tolerance: number): THREE.Object3D | null {
+  const points = flattenEntity(entity, tolerance);
+  if (points.length < 2) return null;
+  const z = entity.kind === 'line' ? entity.start[2] : 0;
+  const geometry = new THREE.BufferGeometry().setFromPoints(points.map(([x, y]) => new THREE.Vector3(x, y, z)));
+  const pattern = LINETYPES[style.linetype] ?? [];
+  if (pattern.length >= 2) {
+    const line = new THREE.Line(
+      geometry,
+      new THREE.LineDashedMaterial({ color: new THREE.Color(style.color), dashSize: pattern[0], gapSize: pattern[1] }),
+    );
+    line.computeLineDistances();
+    return line;
+  }
+  return new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: new THREE.Color(style.color) }));
 }
 
 function disposeObject(o: THREE.Object3D): void {

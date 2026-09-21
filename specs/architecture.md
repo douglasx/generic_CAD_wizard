@@ -20,7 +20,8 @@ Allowed imports are enforced by `.dependency-cruiser.cjs`:
 
 | Package | May import |
 | --- | --- |
-| core, geom2d, platform, kernel | nothing internal (kernel may import core types) |
+| core, platform | nothing internal |
+| geom2d, kernel | core (types and tolerances only; ADR 0008) |
 | kernel-occt | kernel, core |
 | io-native | core |
 | render | core, geom2d |

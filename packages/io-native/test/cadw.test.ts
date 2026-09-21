@@ -30,3 +30,24 @@ describe('.cadw', () => {
     expect(() => readCadw(future)).toThrow(/Unsupported/);
   });
 });
+
+describe('.cadw compatibility', () => {
+  it('opens a file written by M0 (schema 1) and upgrades it', () => {
+    const v1Doc = {
+      schemaVersion: 1,
+      units: 'mm',
+      name: 'Untitled',
+      layers: { '0': { id: '0', name: '0', color: '#e6e6e6', visible: true } },
+      entities: { line_1: { id: 'line_1', kind: 'line', layer: '0', start: [0, 0, 0], end: [10, 5, 0] } },
+      order: ['line_1'],
+    };
+    const file = zipSync({
+      'manifest.json': strToU8(JSON.stringify({ format: 'cadw', formatVersion: 1, generator: 'cad-wizard' })),
+      'document.json': strToU8(JSON.stringify(v1Doc)),
+    });
+    const doc = readCadw(file);
+    expect(doc.schemaVersion).toBe(2);
+    expect(doc.currentLayer).toBe('0');
+    expect(Object.keys(doc.entities)).toEqual(['line_1']);
+  });
+});

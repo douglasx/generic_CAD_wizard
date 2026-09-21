@@ -94,7 +94,11 @@ importers:
         specifier: 2.11.5
         version: 2.11.5
 
-  packages/geom2d: {}
+  packages/geom2d:
+    dependencies:
+      '@cadw/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/io-native:
     dependencies:
@@ -137,6 +141,9 @@ importers:
       '@cadw/core':
         specifier: workspace:*
         version: link:../core
+      '@cadw/geom2d':
+        specifier: workspace:*
+        version: link:../geom2d
       three:
         specifier: 0.186.0
         version: 0.186.0

@@ -9,7 +9,7 @@ import {
   type EntityId,
   type Vec3,
 } from '@cadw/core';
-import { findSnap, type Segment } from '@cadw/geom2d';
+import { findSnap, flattenEntity, type Segment } from '@cadw/geom2d';
 import { readCadw, writeCadw } from '@cadw/io-native';
 import { CADW_FILE, type PlatformAdapter } from '@cadw/platform';
 import { Viewport, type ViewName } from '@cadw/render';
@@ -93,10 +93,12 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     (p: Vec3): Vec3 => {
       const vp = viewportRef.current;
       if (!vp) return p;
-      const segments: Segment[] = entityList(historyRef.current.doc).map((e) => ({
-        start: [e.start[0], e.start[1]],
-        end: [e.end[0], e.end[1]],
-      }));
+      const segments: Segment[] = entityList(historyRef.current.doc).flatMap((e) => {
+        const pts = flattenEntity(e, vp.unitsPerPixel);
+        const segs: Segment[] = [];
+        for (let i = 1; i < pts.length; i++) segs.push({ start: pts[i - 1]!, end: pts[i]! });
+        return segs;
+      });
       const s = findSnap([p[0], p[1]], segments, SNAP_PIXELS * vp.unitsPerPixel);
       return s ? [s.point[0], s.point[1], 0] : p;
     },
@@ -122,7 +124,13 @@ export function App({ platform }: { platform: PlatformAdapter }) {
     }
     if (Math.hypot(p[0] - start[0], p[1] - start[1]) > 1e-9) {
       historyRef.current.execute(
-        addEntity({ id: randomIds.next('line') as EntityId, kind: 'line', layer: '0', start, end: p }),
+        addEntity({
+          id: randomIds.next('line') as EntityId,
+          kind: 'line',
+          layer: historyRef.current.doc.currentLayer,
+          start,
+          end: p,
+        }),
       );
     }
     setStart(null);

@@ -27,7 +27,7 @@ module.exports = {
     },
     { name: 'no-circular', severity: 'error', from: {}, to: { circular: true } },
     onlyMay('core', []),
-    onlyMay('geom2d', []),
+    onlyMay('geom2d', ['core']),
     onlyMay('platform', []),
     onlyMay('kernel', ['core']),
     onlyMay('kernel-occt', ['kernel', 'core']),

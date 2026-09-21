@@ -34,12 +34,13 @@ Human approval: spec sign-off, ADR sign-off, milestone demo.
 | e2e (online + offline) | `pnpm build && pnpm e2e` |
 | Desktop dev / build | `pnpm desktop:dev` / `pnpm desktop:build` |
 | Spikes | `pnpm spike:kernel-size`, `pnpm spike:step-attributes` |
+| Regenerate test corpus | `pnpm corpus:make` |
 
 ## Repo map
 
 - `specs/` — vision, requirements (REQ ids), milestones, ADRs, feature specs, spike reports
 - `packages/core` — document, entities, units, commands, history (no deps)
-- `packages/geom2d` — pure 2D math and snaps (no deps)
+- `packages/geom2d` — pure 2D math, curve flattening and snaps (imports `core` types only, ADR 0008)
 - `packages/kernel` — `KernelAdapter` interface + contract test suite
 - `packages/kernel-occt` — libcascade implementation, runs in the CAD worker
 - `packages/platform` — `PlatformAdapter` interface + web implementation

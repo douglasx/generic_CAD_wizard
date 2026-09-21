@@ -4,10 +4,15 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "dependencies": {
     "@cadw/core": "workspace:*",
-    "three": "0.186.0"
+    "three": "0.186.0",
+    "@cadw/geom2d": "workspace:*"
   },
-  "devDependencies": { "@types/three": "0.186.0" }
+  "devDependencies": {
+    "@types/three": "0.186.0"
+  }
 }
