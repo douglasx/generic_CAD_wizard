@@ -3,7 +3,7 @@
 | # | Milestone | Requirements | Status |
 | --- | --- | --- | --- |
 | M0 | Foundations + walking skeleton (web and desktop) | 001, 002, 009, 010 | Accepted 2026-09-20 |
-| M1 | 2D drafting core | 003 | Next |
+| M1 | 2D drafting core | 003 | Done — awaiting demo sign-off |
 | M2 | Parts and attributes | 008 | Planned |
 | M3 | Annotation + PDF printing | 004, 008 | Planned |
 | M4 | DXF import/export | 011 | Planned |

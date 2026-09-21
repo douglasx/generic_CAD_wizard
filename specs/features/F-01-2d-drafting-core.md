@@ -81,3 +81,8 @@ Each slice is one PR under ~400 changed lines, with `pnpm check` and the e2e sui
 | 5 Selection + grips | Done 2026-09-21 | Click, Shift+click toggle, window (L→R), crossing (R→L), Shift+drag adds, Esc clears; grips for every kind, drag with snaps = one undo step (`updateEntity`); snap markers now show only while a tool or grip drag is active (AutoCAD behaviour) |
 | 6 Transform edits | Done 2026-09-21 | `batch` command + exact similarity transforms; MOVE, COPY (repeat), ROTATE (degrees or point), SCALE (factor or point), MIRROR (keep/erase), ERASE + Delete key; "Select objects" step when nothing is pre-selected; Ctrl+Z works from an empty command line; 3 commits. Known UI debt: toolbar wraps at 1100 px — group into menus in a later slice |
 | 7 Curve edits | Done 2026-09-21 | TRIM (quick mode, removed part previewed), EXTEND (lines, open polylines, arcs), OFFSET (lines, arcs, circles, polylines with mitred corners; distance remembered). Scope note: ellipses and splines act as cutting edges/boundaries but are not yet trimmed, extended or offset themselves — their offsets are not ellipses/splines; deferred to M5 with the kernel. 2 commits |
+| 8 Layers | Done 2026-09-21 | Layer commands (add, rename, colour, lineweight, linetype, visible, lock, delete-if-empty, set current) all undoable; Layers + Properties panel (move selection to layer, ByLayer / override colour); LA toggles the panel; status shows the current layer. 2 commits |
+
+## M1 status
+
+All eight slices done. Awaiting milestone demo sign-off.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { createDocument, entityList, History, randomIds, updateEntity, visibleEntities, type CadDocument, type EntityId, type Vec3 } from '@cadw/core';
+import { CommandError, createDocument, entityList, History, randomIds, updateEntity, visibleEntities, type CadDocument, type Command, type EntityId, type Vec3 } from '@cadw/core';
 import { boxFrom, crossingSelect, gripsOf, moveGrip, pickEntity, windowSelect, type Snap, type Vec2 } from '@cadw/geom2d';
 import { readCadw, writeCadw } from '@cadw/io-native';
 import { CADW_FILE, type PlatformAdapter } from '@cadw/platform';
@@ -7,6 +7,7 @@ import { Viewport, type ViewName } from '@cadw/render';
 import { CommandLine, type CommandLineHandle } from './CommandLine.tsx';
 import { DEFAULT_SETTINGS, parseSettings, resolveCursor, SNAP_LABELS, type DraftSettings } from './cursor.ts';
 import { DraftingBar } from './DraftingBar.tsx';
+import { LayersPanel } from './LayersPanel.tsx';
 import { combineSelection, EMPTY_SELECTION, pruneSelection, type Selection } from './selection.ts';
 import { DRAW_TOOLS, MODIFY_TOOLS } from './commands/draw-tools.ts';
 import { CommandSession } from './commands/session.ts';
@@ -58,6 +59,17 @@ export function App({ platform }: { platform: PlatformAdapter }) {
   const rawCursorRef = useRef<Vec2>([0, 0]);
   const [snapHit, setSnapHit] = useState<Snap | null>(null);
   const [selection, setSelection] = useState<Selection>(EMPTY_SELECTION);
+  const [panelOpen, setPanelOpen] = useState(true);
+  /** Runs a command from the UI (panels), reporting refusals instead of throwing. */
+  const exec = useCallback((c: Command): boolean => {
+    try {
+      historyRef.current.execute(c);
+      return true;
+    } catch (e) {
+      setMessage(e instanceof CommandError ? e.message : String(e));
+      return false;
+    }
+  }, []);
   const selectionRef = useRef<Selection>(EMPTY_SELECTION);
   const gestureRef = useRef<Gesture>(null);
   const selectionChanged = useCallback((next: Selection) => {
@@ -483,7 +495,9 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         <button aria-pressed={view === 'iso'} onClick={() => switchView('iso')}>Iso</button>
         <span className="sep" />
         <button onClick={kernelCheck}>Kernel check</button>
+        <button aria-pressed={panelOpen} onClick={() => setPanelOpen((o) => !o)} title="Layers and properties (LA)">Layers</button>
       </header>
+      <div className={panelOpen ? 'workspace with-panel' : 'workspace'}>
       <main
         ref={hostRef}
         className="viewport"
@@ -492,14 +506,23 @@ export function App({ platform }: { platform: PlatformAdapter }) {
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       />
+      {panelOpen && <LayersPanel doc={doc} selection={selection} exec={exec} newId={(p) => randomIds.next(p)} />}
+      </div>
       <CommandLine
         ref={cmdRef}
         snapshot={live}
-        onSubmit={(text) => session.submit(text, cursorRef.current)}
+        onSubmit={(text) => {
+          if (!session.snapshot.activeTool && /^(LA|LAYER)$/i.test(text.trim())) {
+            setPanelOpen((o) => !o);
+            return;
+          }
+          session.submit(text, cursorRef.current);
+        }}
         onCancel={() => session.cancel()}
       />
       <footer className="status">
         <DraftingBar settings={settings} onChange={changeSettings} />
+        <span data-testid="current-layer">Layer: {doc.layers[doc.currentLayer]?.name ?? '?'}</span>
         <span data-testid="entity-count">{entityList(doc).length} entities</span>
         <span data-testid="selection-count">{selection.size > 0 ? `${selection.size} selected` : ''}</span>
         <span className="snapkind" data-testid="snap-kind">{snapHit ? SNAP_LABELS[snapHit.kind] : ''}</span>

@@ -39,7 +39,7 @@ test('saves a .cadw file and opens it again', async ({ page }) => {
   const bytes = readFileSync(path);
   expect(bytes.subarray(0, 2).toString()).toBe('PK'); // zip container
 
-  await page.getByRole('button', { name: 'New' }).click();
+  await page.getByRole('button', { name: 'New', exact: true }).click();
   await expect(page.getByTestId('entity-count')).toHaveText('0 entities');
 
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Open' }).click()]);
