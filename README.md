@@ -19,7 +19,7 @@ Open source under Apache-2.0.
 
 ```bash
 corepack enable
-pnpm install
+pnpm install        # also after any git pull that changed package.json or the lockfile
 pnpm dev            # http://localhost:5173
 pnpm check          # typecheck + layer rules + unit tests
 pnpm build && pnpm e2e

@@ -28,7 +28,7 @@ Human approval: spec sign-off, ADR sign-off, milestone demo.
 
 | Task | Command |
 | --- | --- |
-| Install | `pnpm install` |
+| Install | `pnpm install` — re-run after any pull that changed a `package.json` or the lockfile; `dev`, `build` and `test` check the workspace links first and tell you when it is needed |
 | Dev server | `pnpm dev` |
 | All gates (fast) | `pnpm check` (typecheck + layers + unit tests) |
 | e2e (online + offline) | `pnpm build && pnpm e2e` |

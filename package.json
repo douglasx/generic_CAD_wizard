@@ -10,11 +10,14 @@
     "node": ">=22"
   },
   "scripts": {
+    "predev": "node tools/check-workspace-links.mjs",
     "dev": "pnpm --filter @cadw/app dev",
+    "prebuild": "node tools/check-workspace-links.mjs",
     "build": "pnpm --filter @cadw/app build",
     "preview": "pnpm --filter @cadw/app preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint:layers": "depcruise packages --config .dependency-cruiser.cjs",
+    "pretest": "node tools/check-workspace-links.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "e2e": "playwright test",
